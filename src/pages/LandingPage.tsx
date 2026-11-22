@@ -1,5 +1,4 @@
-import { useMemo, useState } from 'react';
-import heroImg from '../assets/hero.png';
+import { useEffect, useMemo, useState } from 'react';
 import { ReceiptCard } from '../components/ReceiptCard';
 import { DEMO_CHANNELS, DEMO_INGREDIENTS, DEMO_RECIPE } from '../lib/demoData';
 import { calculateRecipePricing, formatRupiah } from '../lib/pricing';
@@ -8,6 +7,54 @@ import type { Channel, ProfitMode, RecipeCalculation } from '../types';
 interface LandingPageProps {
   onNavigate: (to: string) => void;
 }
+
+interface TestimonialItem {
+  id: string;
+  name: string;
+  business: string;
+  role: string;
+  quote: string;
+  impact: string;
+}
+
+const TESTIMONIALS: TestimonialItem[] = [
+  {
+    id: 't-1',
+    name: 'Rizky Pratama',
+    business: 'Kopi Senja Pagi',
+    role: 'Pemilik Kedai Kopi',
+    quote:
+      'Dulu ngira jualan es kopi susu harga Rp13.000 sudah aman, ternyata setelah dihitung bareng cup, sedotan, dan fee aplikasi marginnya tipis banget. Sekarang lebih tenang atur harga.',
+    impact: 'Margin bersih naik +14%',
+  },
+  {
+    id: 't-2',
+    name: 'Dian Kusuma',
+    business: 'Dapur Dimsum Mba Dian',
+    role: 'UMKM Frozen & Ready-to-Eat',
+    quote:
+      'Enaknya langsung kelihatan beda untung jual langsung sama lewat GoFood atau GrabFood. Tinggal ubah takaran atau harga beli bahan, nota HPP langsung menyesuaikan.',
+    impact: 'Hitung menu baru < 3 menit',
+  },
+  {
+    id: 't-3',
+    name: 'Fajar Nugroho',
+    business: 'Bakso Bakar Mas Fajar',
+    role: 'Usaha Kuliner Harian',
+    quote:
+      'Waktu harga saus dan kemasan naik, aku bisa cek cepat mana menu yang masih sehat dan mana yang perlu disesuaikan tanpa bongkar rumus Excel yang bikin pusing.',
+    impact: 'Zero boncos saat harga bahan naik',
+  },
+  {
+    id: 't-4',
+    name: 'Hendra Wijaya',
+    business: 'Churros & Toast Co.',
+    role: 'Booth Jajanan Mall',
+    quote:
+      'Simulasi target untung per porsi maupun persen bikin keputusan promo atau bundling jadi terukur. Sangat membantu buat yang baru mulai merapikan pembukuan.',
+    impact: 'Harga promo lebih terukur',
+  },
+];
 
 export function LandingPage({ onNavigate }: LandingPageProps) {
   const sampleRecipe = DEMO_RECIPE;
@@ -19,6 +66,25 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
   const [profitMode, setProfitMode] = useState<ProfitMode>(sampleRecipe.profit_mode);
   const [profitValue, setProfitValue] = useState<number>(sampleRecipe.profit_value);
   const [copiedSummary, setCopiedSummary] = useState(false);
+
+  // State testimoni auto-geser: berhenti otomatis ketika diklik
+  const [activeTestimonialIdx, setActiveTestimonialIdx] = useState(0);
+  const [isAutoSliding, setIsAutoSliding] = useState(true);
+
+  useEffect(() => {
+    if (!isAutoSliding) return;
+
+    const timer = window.setInterval(() => {
+      setActiveTestimonialIdx((prev) => (prev + 1) % TESTIMONIALS.length);
+    }, 3600);
+
+    return () => window.clearInterval(timer);
+  }, [isAutoSliding]);
+
+  const handleSelectTestimonial = (idx: number) => {
+    setActiveTestimonialIdx(idx);
+    setIsAutoSliding(false);
+  };
 
   const selectedChannel = useMemo(
     () => channels.find((ch) => ch.id === selectedChannelId) ?? channels[0],
@@ -109,7 +175,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
         </div>
       </header>
 
-      <main className="relative mx-auto grid max-w-6xl gap-10 px-4 py-12 lg:grid-cols-2 lg:items-start">
+      <main className="relative mx-auto max-w-6xl space-y-16 px-4 py-12">
         {/* Efek ambient glow modern */}
         <div
           aria-hidden="true"
@@ -120,147 +186,291 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
           className="pointer-events-none absolute right-0 top-28 h-80 w-80 rounded-full bg-cyan-500/15 blur-3xl"
         />
 
-        {/* Kolom Kiri: Headline & Preview Visual */}
-        <div className="relative z-10 space-y-6">
-          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3.5 py-1 text-xs font-medium text-emerald-300 shadow-sm shadow-emerald-500/10">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-            Hitung HPP, Food Cost %, &amp; Harga Jual UMKM Kuliner
-          </div>
-
-          <h1 className="text-3xl font-bold leading-tight tracking-tight text-white sm:text-5xl">
-            Pastikan Setiap Porsi &amp; Gelas Jualan Kamu{' '}
-            <span className="bg-gradient-to-r from-emerald-300 via-teal-200 to-cyan-300 bg-clip-text text-transparent">
-              Untung Terukur
-            </span>
-          </h1>
-
-          <p className="text-base leading-relaxed text-slate-300">
-            Hitung biaya bahan baku per porsi, cek potongan fee GoFood, GrabFood, dan
-            ShopeeFood, lalu tentukan harga jual yang aman tanpa ribet hitung manual.
-          </p>
-
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => onNavigate('/app')}
-              className="rounded-xl bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 px-6 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-emerald-500/25 transition duration-200 hover:-translate-y-0.5 hover:shadow-emerald-400/35"
-            >
-              Mulai Hitung Sekarang
-            </button>
-            <button
-              type="button"
-              onClick={() => onNavigate('/masuk')}
-              className="rounded-xl border border-slate-700/80 bg-slate-900/80 px-6 py-3 text-sm font-medium text-slate-200 backdrop-blur transition duration-200 hover:-translate-y-0.5 hover:border-slate-500 hover:bg-slate-900"
-            >
-              Login / Daftar Akun
-            </button>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3 pt-1 text-xs">
-            <div className="rounded-2xl border border-slate-800/90 bg-slate-900/60 p-3.5 backdrop-blur">
-              <p className="text-slate-400">Modal / Porsi</p>
-              <p className="mt-1 text-base font-bold text-white tabular-nums">
-                {formatRupiah(sampleCalc.hpp)}
-              </p>
+        {/* Hero & Simulasi Nota */}
+        <section className="relative z-10 grid gap-10 lg:grid-cols-2 lg:items-start">
+          <div className="space-y-6">
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3.5 py-1 text-xs font-medium text-emerald-300 shadow-sm shadow-emerald-500/10">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+              Hitung HPP, Food Cost %, &amp; Harga Jual UMKM Kuliner
             </div>
-            <div className="rounded-2xl border border-slate-800/90 bg-slate-900/60 p-3.5 backdrop-blur">
-              <p className="text-slate-400">Bahan + Kemasan</p>
-              <p className="mt-1 text-base font-bold text-emerald-300 tabular-nums">
-                {formatRupiah(
-                  sampleCalc.ingredientSubtotalPerPortion + sampleCalc.packagingSubtotalPerPortion
+
+            <h1 className="text-3xl font-bold leading-tight tracking-tight text-white sm:text-5xl">
+              Pastikan Setiap Porsi &amp; Gelas Jualan Kamu{' '}
+              <span className="bg-gradient-to-r from-emerald-300 via-teal-200 to-cyan-300 bg-clip-text text-transparent">
+                Untung Terukur
+              </span>
+            </h1>
+
+            <p className="text-base leading-relaxed text-slate-300">
+              Hitung biaya bahan baku per porsi, cek potongan fee GoFood, GrabFood, dan
+              ShopeeFood, lalu tentukan harga jual yang aman tanpa ribet hitung manual.
+            </p>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => onNavigate('/app')}
+                className="rounded-xl bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 px-6 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-emerald-500/25 transition duration-200 hover:-translate-y-0.5 hover:shadow-emerald-400/35"
+              >
+                Mulai Hitung Sekarang
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigate('/masuk')}
+                className="rounded-xl border border-slate-700/80 bg-slate-900/80 px-6 py-3 text-sm font-medium text-slate-200 backdrop-blur transition duration-200 hover:-translate-y-0.5 hover:border-slate-500 hover:bg-slate-900"
+              >
+                Login / Daftar Akun
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 pt-1 text-xs">
+              <div className="rounded-2xl border border-slate-800/90 bg-slate-900/60 p-3.5 backdrop-blur">
+                <p className="text-slate-400">Modal / Porsi</p>
+                <p className="mt-1 text-base font-bold text-white tabular-nums">
+                  {formatRupiah(sampleCalc.hpp)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-800/90 bg-slate-900/60 p-3.5 backdrop-blur">
+                <p className="text-slate-400">Bahan + Kemasan</p>
+                <p className="mt-1 text-base font-bold text-emerald-300 tabular-nums">
+                  {formatRupiah(
+                    sampleCalc.ingredientSubtotalPerPortion + sampleCalc.packagingSubtotalPerPortion
+                  )}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-800/90 bg-slate-900/60 p-3.5 backdrop-blur">
+                <p className="text-slate-400">Channel Aktif</p>
+                <p className="mt-1 truncate text-base font-bold text-cyan-300">
+                  {selectedChannel?.name ?? '-'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Kartu Simulasi Interaktif + Nota */}
+          <div className="rounded-3xl border border-slate-800/90 bg-gradient-to-b from-slate-900/90 via-slate-900/80 to-slate-950/90 p-5 shadow-2xl shadow-black/60 backdrop-blur-xl ring-1 ring-white/5 transition duration-300 hover:border-emerald-400/35">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
+                  Contoh Simulasi Nota HPP
+                </span>
+                <p className="text-[11px] text-slate-400">
+                  Pilih channel &amp; atur target untung langsung di bawah
+                </p>
+              </div>
+              <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-medium text-emerald-300">
+                Live Preview
+              </span>
+            </div>
+
+            <div className="mb-4 rounded-2xl border border-slate-800/90 bg-slate-950/75 p-3 text-xs">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-slate-400">Simulasi Channel:</span>
+                {copiedSummary && (
+                  <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[11px] font-medium text-emerald-300">
+                    Ringkasan tersalin!
+                  </span>
                 )}
-              </p>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+                {channels.map((ch) => {
+                  const active = ch.id === selectedChannel?.id;
+                  return (
+                    <button
+                      key={ch.id}
+                      type="button"
+                      onClick={() => setSelectedChannelId(ch.id)}
+                      className={`rounded-xl border px-2.5 py-1.5 text-center transition duration-150 ${
+                        active
+                          ? 'border-emerald-400/70 bg-emerald-500/15 font-semibold text-emerald-300 shadow-sm shadow-emerald-500/20'
+                          : 'border-slate-800 bg-slate-900/90 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                      }`}
+                    >
+                      <span className="block truncate">{ch.name}</span>
+                      <span className="block text-[10px] opacity-75">{ch.fee_percent}%</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <div className="rounded-2xl border border-slate-800/90 bg-slate-900/60 p-3.5 backdrop-blur">
-              <p className="text-slate-400">Channel Aktif</p>
-              <p className="mt-1 truncate text-base font-bold text-cyan-300">
-                {selectedChannel?.name ?? '-'}
-              </p>
+
+            <div
+              key={`${profitMode}-${selectedChannel?.id}`}
+              className="transition-all duration-300"
+            >
+              <ReceiptCard
+                recipeName={sampleRecipe.name}
+                portions={sampleRecipe.portions}
+                calc={sampleCalc}
+                profitMode={profitMode}
+                profitValue={profitValue}
+                onChangeProfitMode={(mode) => {
+                  setProfitMode(mode);
+                  setProfitValue(mode === 'percent' ? 40 : 5000);
+                }}
+                onChangeProfitValue={(val) =>
+                  setProfitValue(Number.isFinite(val) ? Math.max(0, val) : 0)
+                }
+                selectedChannelFee={selectedChannel?.fee_percent ?? 0}
+                onChangeChannelFee={handleChannelFeeChange}
+                interactiveDemo={true}
+                onShareReceipt={handleCopySummary}
+              />
             </div>
           </div>
+        </section>
 
-          <div className="group relative overflow-hidden rounded-2xl border border-slate-800/90 bg-slate-900/60 shadow-xl transition duration-300 hover:border-emerald-400/40">
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent opacity-80 transition duration-300 group-hover:opacity-50" />
-            <img
-              src={heroImg}
-              alt="Ilustrasi perhitungan HPP usaha kuliner"
-              className="h-48 w-full object-cover transition duration-500 group-hover:scale-[1.03]"
-            />
-          </div>
-        </div>
-
-        {/* Kolom Kanan: Kartu Simulasi Interaktif + Nota */}
-        <div className="relative z-10 rounded-3xl border border-slate-800/90 bg-gradient-to-b from-slate-900/90 via-slate-900/80 to-slate-950/90 p-5 shadow-2xl shadow-black/60 backdrop-blur-xl ring-1 ring-white/5 transition duration-300 hover:border-emerald-400/35">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        {/* Bagian Testimoni Auto-Geser (Berhenti Saat Diklik) */}
+        <section
+          aria-label="Testimoni pengguna HPP-Kilat"
+          className="relative z-10 rounded-3xl border border-slate-800/90 bg-slate-900/65 p-6 shadow-xl backdrop-blur-xl sm:p-8"
+        >
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
             <div>
               <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
-                Contoh Simulasi Nota HPP
+                Cerita Pengguna
               </span>
-              <p className="text-[11px] text-slate-400">
-                Pilih channel &amp; atur target untung langsung di bawah
-              </p>
+              <h2 className="mt-1 text-2xl font-bold text-white sm:text-3xl">
+                Setelah Menggunakan HPP-Kilat
+              </h2>
             </div>
-            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-medium text-emerald-300">
-              Live Preview
-            </span>
-          </div>
 
-          {/* Pemilih Channel Cepat */}
-          <div className="mb-4 rounded-2xl border border-slate-800/90 bg-slate-950/75 p-3 text-xs">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-slate-400">Simulasi Channel:</span>
-              {copiedSummary && (
-                <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[11px] font-medium text-emerald-300">
-                  Ringkasan tersalin!
-                </span>
+            <div className="flex items-center gap-2 text-xs">
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-medium ${
+                  isAutoSliding
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                    : 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+                }`}
+              >
+                <span
+                  className={`h-2 w-2 rounded-full ${
+                    isAutoSliding ? 'animate-pulse bg-emerald-400' : 'bg-amber-400'
+                  }`}
+                />
+                {isAutoSliding ? 'Geser otomatis aktif' : 'Dijeda (klik kartu untuk pilih)'}
+              </span>
+
+              {!isAutoSliding && (
+                <button
+                  type="button"
+                  onClick={() => setIsAutoSliding(true)}
+                  className="rounded-full border border-slate-700 bg-slate-800/90 px-3 py-1 font-medium text-slate-200 transition hover:border-emerald-400/50 hover:text-emerald-300"
+                >
+                  Lanjutkan Auto
+                </button>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-              {channels.map((ch) => {
-                const active = ch.id === selectedChannel?.id;
+          </div>
+
+          <div className="overflow-hidden">
+            <div
+              className="flex transition-transform duration-500 ease-out"
+              style={{
+                transform: `translateX(-${activeTestimonialIdx * 100}%)`,
+              }}
+            >
+              {TESTIMONIALS.map((item, idx) => {
+                const isSelected = idx === activeTestimonialIdx;
                 return (
-                  <button
-                    key={ch.id}
-                    type="button"
-                    onClick={() => setSelectedChannelId(ch.id)}
-                    className={`rounded-xl border px-2.5 py-1.5 text-center transition duration-150 ${
-                      active
-                        ? 'border-emerald-400/70 bg-emerald-500/15 font-semibold text-emerald-300 shadow-sm shadow-emerald-500/20'
-                        : 'border-slate-800 bg-slate-900/90 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-                    }`}
-                  >
-                    <span className="block truncate">{ch.name}</span>
-                    <span className="block text-[10px] opacity-75">{ch.fee_percent}%</span>
-                  </button>
+                  <div key={item.id} className="w-full shrink-0 px-0.5">
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => handleSelectTestimonial(idx)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handleSelectTestimonial(idx);
+                        }
+                      }}
+                      className={`cursor-pointer rounded-2xl border p-6 transition duration-200 ${
+                        isSelected
+                          ? 'border-emerald-400/50 bg-slate-950/90 shadow-lg shadow-emerald-500/10'
+                          : 'border-slate-800 bg-slate-950/60 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400/20 to-cyan-400/20 font-bold text-emerald-300 ring-1 ring-emerald-400/30">
+                            {item.name
+                              .split(' ')
+                              .map((part) => part[0])
+                              .slice(0, 2)
+                              .join('')}
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-white">{item.name}</p>
+                            <p className="text-xs text-slate-400">
+                              {item.role} &bull; {item.business}
+                            </p>
+                          </div>
+                        </div>
+
+                        <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+                          {item.impact}
+                        </span>
+                      </div>
+
+                      <p className="mt-4 text-sm leading-relaxed text-slate-200 sm:text-base">
+                        &ldquo;{item.quote}&rdquo;
+                      </p>
+
+                      <p className="mt-4 text-[11px] text-slate-400">
+                        Klik pada kartu ini untuk berhenti bergeser otomatis dan fokus membaca.
+                      </p>
+                    </div>
+                  </div>
                 );
               })}
             </div>
           </div>
 
-          <div
-            key={`${profitMode}-${selectedChannel?.id}`}
-            className="transition-all duration-300"
-          >
-            <ReceiptCard
-              recipeName={sampleRecipe.name}
-              portions={sampleRecipe.portions}
-              calc={sampleCalc}
-              profitMode={profitMode}
-              profitValue={profitValue}
-              onChangeProfitMode={(mode) => {
-                setProfitMode(mode);
-                setProfitValue(mode === 'percent' ? 40 : 5000);
-              }}
-              onChangeProfitValue={(val) =>
-                setProfitValue(Number.isFinite(val) ? Math.max(0, val) : 0)
-              }
-              selectedChannelFee={selectedChannel?.fee_percent ?? 0}
-              onChangeChannelFee={handleChannelFeeChange}
-              interactiveDemo={true}
-              onShareReceipt={handleCopySummary}
-            />
+          {/* Indikator navigasi slide (klik langsung menghentikan auto-geser) */}
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              {TESTIMONIALS.map((item, idx) => {
+                const active = idx === activeTestimonialIdx;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleSelectTestimonial(idx)}
+                    aria-label={`Lihat testimoni ${item.name}`}
+                    className={`h-2.5 rounded-full transition-all duration-200 ${
+                      active
+                        ? 'w-8 bg-emerald-400'
+                        : 'w-2.5 bg-slate-700 hover:bg-slate-500'
+                    }`}
+                  />
+                );
+              })}
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  handleSelectTestimonial(
+                    (activeTestimonialIdx - 1 + TESTIMONIALS.length) % TESTIMONIALS.length
+                  )
+                }
+                className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-slate-500"
+              >
+                Sebelumnya
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  handleSelectTestimonial((activeTestimonialIdx + 1) % TESTIMONIALS.length)
+                }
+                className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-slate-500"
+              >
+                Berikutnya
+              </button>
+            </div>
           </div>
-        </div>
+        </section>
       </main>
     </div>
   );
