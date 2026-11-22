@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { ReceiptCard } from '../components/ReceiptCard';
 import { UpgradeModal } from '../components/UpgradeModal';
 import { DEMO_CHANNELS, DEMO_INGREDIENTS, DEMO_RECIPE } from '../lib/demoData';
-import { calculateRecipePricing, formatRupiah } from '../lib/pricing';
-import type { Channel, ProfitMode, RecipeCalculation } from '../types';
+import { calculateNetProfit, calculateRecipePricing, formatRupiah } from '../lib/pricing';
+import type { ProfitMode, RecipeCalculation } from '../types';
 
 interface LandingPageProps {
   onNavigate: (to: string) => void;
@@ -57,18 +57,34 @@ const TESTIMONIALS: TestimonialItem[] = [
   },
 ];
 
+type DashboardScenario = 'rugi' | 'untung';
+
 export function LandingPage({ onNavigate }: LandingPageProps) {
   const sampleRecipe = DEMO_RECIPE;
 
-  const [channels, setChannels] = useState<Channel[]>(DEMO_CHANNELS);
-  const [selectedChannelId, setSelectedChannelId] = useState<string>(
-    DEMO_CHANNELS[1]?.id ?? DEMO_CHANNELS[0]?.id ?? 'ch-gofood'
-  );
-  const [profitMode, setProfitMode] = useState<ProfitMode>(sampleRecipe.profit_mode);
-  const [profitValue, setProfitValue] = useState<number>(sampleRecipe.profit_value);
-  const [guessedPrice, setGuessedPrice] = useState<number>(12000);
+  const [profitMode] = useState<ProfitMode>(sampleRecipe.profit_mode);
+  const [profitValue] = useState<number>(sampleRecipe.profit_value);
   const [copiedSummary, setCopiedSummary] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+
+  // State animasi dashboard: Jualan Rugi vs Jualan Untung
+  const [scenario, setScenario] = useState<DashboardScenario>('rugi');
+  const [isDashboardAuto, setIsDashboardAuto] = useState(true);
+
+  useEffect(() => {
+    if (!isDashboardAuto) return;
+
+    const timer = window.setInterval(() => {
+      setScenario((prev) => (prev === 'rugi' ? 'untung' : 'rugi'));
+    }, 3400);
+
+    return () => window.clearInterval(timer);
+  }, [isDashboardAuto]);
+
+  const handleSelectScenario = (next: DashboardScenario) => {
+    setScenario(next);
+    setIsDashboardAuto(false);
+  };
 
   // State testimoni auto-geser: berhenti otomatis ketika diklik
   const [activeTestimonialIdx, setActiveTestimonialIdx] = useState(0);
@@ -89,11 +105,6 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
     setIsAutoSliding(false);
   };
 
-  const selectedChannel = useMemo(
-    () => channels.find((ch) => ch.id === selectedChannelId) ?? channels[0],
-    [channels, selectedChannelId]
-  );
-
   const sampleCalc = useMemo<RecipeCalculation>(() => {
     return calculateRecipePricing({
       items: sampleRecipe.items,
@@ -102,65 +113,52 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
       extraCost: sampleRecipe.extra_cost,
       profitMode,
       profitValue,
-      channels,
+      channels: DEMO_CHANNELS,
       roundingStep: 500,
       customPricesByChannel: {},
     });
-  }, [sampleRecipe, profitMode, profitValue, channels]);
+  }, [sampleRecipe, profitMode, profitValue]);
 
-  const activeChannelCalc = useMemo(
-    () =>
-      sampleCalc.channels.find((c) => c.channel.id === selectedChannel?.id) ??
-      sampleCalc.channels[0],
-    [sampleCalc, selectedChannel]
-  );
+  const appChannelCalc =
+    sampleCalc.channels.find((c) => c.channel.id === 'ch-gofood') ?? sampleCalc.channels[0];
+  const feePercent = appChannelCalc?.channel.fee_percent ?? 20;
 
-  const handleChannelFeeChange = (nextFee: number) => {
-    const safeFee = Number.isFinite(nextFee) ? Math.min(99, Math.max(0, nextFee)) : 0;
-    const targetId = selectedChannel?.id;
-    if (!targetId) return;
+  const dashboardMetrics = useMemo(() => {
+    const hpp = sampleCalc.hpp;
+    const safeMinPrice = appChannelCalc?.minPrice ?? Math.ceil((hpp + 5000) / 500) * 500;
+    const lossPrice = Math.max(1000, Math.round((hpp * 1.15) / 500) * 500);
+    const activePrice = scenario === 'untung' ? safeMinPrice : lossPrice;
 
-    setChannels((prev) =>
-      prev.map((ch) => (ch.id === targetId ? { ...ch, fee_percent: safeFee } : ch))
-    );
-  };
+    const feeAmount = Math.round(activePrice * (feePercent / 100));
+    const netProfit = Math.round(calculateNetProfit(activePrice, hpp, feePercent, 0));
+    const dailyPortions = 30;
+    const dailyProfit = netProfit * dailyPortions;
 
-  const guessedLeakStatus = useMemo(() => {
-    if (!activeChannelCalc) return null;
-    const feeRate = (activeChannelCalc.channel.fee_percent || 0) / 100;
-    const netReceived = guessedPrice * (1 - feeRate);
-    const netProfit = netReceived - sampleCalc.hpp;
-    const minPrice = activeChannelCalc.minPrice;
-
-    if (minPrice !== null && guessedPrice < minPrice) {
-      return {
-        isLeaky: true,
-        text: `Harga tebakan ${formatRupiah(guessedPrice)} masih di bawah batas aman ${formatRupiah(
-          minPrice
-        )} (laba bersih ${formatRupiah(netProfit)}).`,
-      };
-    }
+    const totalBarBase = Math.max(activePrice, hpp + feeAmount + Math.max(0, netProfit), 1);
+    const hppBarPct = Math.min(100, Math.max(8, (hpp / totalBarBase) * 100));
+    const feeBarPct = Math.min(100 - hppBarPct, Math.max(0, (feeAmount / totalBarBase) * 100));
+    const profitBarPct = Math.max(0, 100 - hppBarPct - feeBarPct);
 
     return {
-      isLeaky: false,
-      text: `Harga tebakan ${formatRupiah(
-        guessedPrice
-      )} sudah melewati batas aman channel ini (estimasi laba bersih ${formatRupiah(netProfit)}).`,
+      hpp,
+      activePrice,
+      safeMinPrice,
+      lossPrice,
+      feeAmount,
+      netProfit,
+      dailyProfit,
+      dailyPortions,
+      hppBarPct,
+      feeBarPct,
+      profitBarPct,
     };
-  }, [activeChannelCalc, guessedPrice, sampleCalc.hpp]);
+  }, [sampleCalc.hpp, appChannelCalc?.minPrice, scenario, feePercent]);
 
   const handleCopySummary = async () => {
-    const minPriceText =
-      activeChannelCalc && !activeChannelCalc.impossibleMargin && activeChannelCalc.minPrice !== null
-        ? formatRupiah(activeChannelCalc.minPrice)
-        : 'Tidak tercapai';
-
     const summary = [
       `Simulasi HPP - ${sampleRecipe.name} (${sampleRecipe.portions} porsi)`,
-      `Modal per porsi: ${formatRupiah(sampleCalc.hpp)}`,
-      `Channel ${activeChannelCalc?.channel.name ?? 'Utama'} (Fee ${
-        activeChannelCalc?.channel.fee_percent ?? 0
-      }%): Batas aman ${minPriceText}`,
+      `Modal per porsi (HPP): ${formatRupiah(sampleCalc.hpp)}`,
+      `Harga aman aplikasi (${feePercent}% fee): ${formatRupiah(dashboardMetrics.safeMinPrice)}`,
     ].join('\n');
 
     try {
@@ -171,6 +169,8 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
       setCopiedSummary(false);
     }
   };
+
+  const isUntung = scenario === 'untung';
 
   return (
     <div className="min-h-screen overflow-x-clip bg-slate-950 text-slate-100 selection:bg-emerald-500/30 selection:text-emerald-200">
@@ -238,12 +238,12 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
           className="pointer-events-none absolute right-0 top-28 h-80 w-80 rounded-full bg-cyan-500/15 blur-3xl"
         />
 
-        {/* Hero & Cek Aman Harga Jual Sebelum Rilis Menu */}
+        {/* Hero & Animasi Dashboard Jualan Untung vs Jualan Rugi */}
         <section className="relative z-10 grid gap-10 lg:grid-cols-2 lg:items-start">
           <div className="space-y-6">
             <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3.5 py-1 text-xs font-medium text-emerald-300 shadow-sm shadow-emerald-500/10">
               <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-              Hitung HPP, Food Cost %, &amp; Harga Jual UMKM Kuliner
+              Kenapa HPP Wajib Dihitung Sebelum Jualan
             </div>
 
             <h1 className="text-3xl font-bold leading-tight tracking-tight text-white sm:text-5xl">
@@ -254,9 +254,9 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             </h1>
 
             <p className="text-base leading-relaxed text-slate-300">
-              Banyak jualan yang kelihatannya ramai tapi marginnya bocor karena harga cuma ikut
-              kompetitor atau tebakan modal. Hitung gramasi bahan, kemasan, dan potongan aplikasi
-              sebelum mulai jualan.
+              Harga jual yang cuma ikut-ikutan atau menebak modal bisa bikin jualan kelihatan
+              ramai, padahal setelah bahan, kemasan, dan potongan kanal dihitung hasilnya rugi atau
+              tipis banget.
             </p>
 
             <div className="flex flex-wrap gap-3">
@@ -265,7 +265,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 onClick={() => onNavigate('/app')}
                 className="rounded-xl bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 px-6 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-emerald-500/25 transition duration-200 hover:-translate-y-0.5 hover:shadow-emerald-400/35"
               >
-                Mulai Hitung Sekarang
+                Mulai Hitung HPP Sekarang
               </button>
               <button
                 type="button"
@@ -277,94 +277,178 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             </div>
           </div>
 
-          {/* Kartu Cek Kebocoran Harga Jual Sebelum Buka Lapak */}
-          <div className="rounded-3xl border border-slate-800/90 bg-gradient-to-b from-slate-900/90 via-slate-900/80 to-slate-950/90 p-5 shadow-2xl shadow-black/60 backdrop-blur-xl ring-1 ring-white/5 transition duration-300 hover:border-emerald-400/35">
-            <div className="mb-4">
-              <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
-                Cek Aman Harga Jual Sebelum Rilis Menu
-              </span>
-              <p className="mt-1 text-xs leading-relaxed text-slate-400">
-                Bandingkan harga tebakanmu vs batas aman setelah bahan, kemasan, &amp; fee channel
-              </p>
-            </div>
+          <div className="space-y-5">
+            {/* Animasi Dashboard: Jualan Untung vs Jualan Rugi */}
+            <div
+              className={`rounded-3xl border p-5 shadow-2xl backdrop-blur-xl transition-all duration-500 ${
+                isUntung
+                  ? 'border-emerald-400/40 bg-gradient-to-b from-slate-900/95 via-emerald-950/20 to-slate-950/95 shadow-emerald-950/40'
+                  : 'border-rose-400/35 bg-gradient-to-b from-slate-900/95 via-rose-950/20 to-slate-950/95 shadow-rose-950/40'
+              }`}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <span
+                    className={`inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider transition-colors duration-300 ${
+                      isUntung ? 'text-emerald-300' : 'text-rose-300'
+                    }`}
+                  >
+                    <span
+                      className={`h-2 w-2 rounded-full ${
+                        isUntung ? 'animate-ping bg-emerald-400' : 'animate-pulse bg-rose-400'
+                      }`}
+                    />
+                    {isUntung
+                      ? 'Simulasi: Jualan Untung (Pakai Hitung HPP)'
+                      : 'Simulasi: Jualan Rugi (Harga Asal Tebak)'}
+                  </span>
+                  <p className="mt-0.5 text-[11px] text-slate-400">
+                    Contoh: {sampleRecipe.name} &bull; Fee kanal {feePercent}%
+                  </p>
+                </div>
 
-            <div className="mb-4 space-y-3 rounded-2xl border border-slate-800/90 bg-slate-950/75 p-3 text-xs">
-              <div className="flex items-center justify-between gap-2">
-                <label htmlFor="tebakan-harga" className="text-slate-300">
-                  Coba harga tebakan jualanmu (Rp):
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    id="tebakan-harga"
-                    type="number"
-                    min={0}
-                    step={500}
-                    value={guessedPrice}
-                    onChange={(e) => setGuessedPrice(Math.max(0, Number(e.target.value) || 0))}
-                    className="w-28 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-right font-semibold text-white tabular-nums"
-                  />
-                  {copiedSummary && (
-                    <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[11px] font-medium text-emerald-300">
-                      Tersalin!
-                    </span>
-                  )}
+                <div className="flex items-center gap-1.5 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectScenario('rugi')}
+                    className={`rounded-lg px-2.5 py-1 font-semibold transition ${
+                      !isUntung
+                        ? 'bg-rose-500 text-white shadow-sm shadow-rose-500/30'
+                        : 'bg-slate-800/80 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Rugi
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectScenario('untung')}
+                    className={`rounded-lg px-2.5 py-1 font-semibold transition ${
+                      isUntung
+                        ? 'bg-emerald-400 text-slate-950 shadow-sm shadow-emerald-400/30'
+                        : 'bg-slate-800/80 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Untung
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsDashboardAuto((prev) => !prev)}
+                    className="rounded-lg border border-slate-700/80 bg-slate-900/90 px-2.5 py-1 text-[11px] font-medium text-slate-300 transition hover:border-slate-500"
+                  >
+                    {isDashboardAuto ? 'Jeda' : 'Auto'}
+                  </button>
                 </div>
               </div>
 
-              {guessedLeakStatus && (
-                <p
-                  className={`rounded-xl border px-3 py-2 text-[11px] leading-relaxed ${
-                    guessedLeakStatus.isLeaky
-                      ? 'border-rose-500/30 bg-rose-500/10 text-rose-300'
-                      : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-                  }`}
-                >
-                  {guessedLeakStatus.text}
-                </p>
-              )}
+              {/* Kartu Angka Utama Beranimasi */}
+              <div className="mt-4 grid grid-cols-3 gap-2.5 text-xs">
+                <div className="rounded-2xl border border-slate-800/90 bg-slate-950/75 p-3">
+                  <span className="text-[11px] text-slate-400">Harga Jual</span>
+                  <p className="mt-1 text-sm font-bold text-white tabular-nums transition-all duration-300 sm:text-base">
+                    {formatRupiah(dashboardMetrics.activePrice)}
+                  </p>
+                </div>
 
-              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-                {channels.map((ch) => {
-                  const active = ch.id === selectedChannel?.id;
-                  return (
-                    <button
-                      key={ch.id}
-                      type="button"
-                      onClick={() => setSelectedChannelId(ch.id)}
-                      className={`rounded-xl border px-2.5 py-1.5 text-center transition duration-150 ${
-                        active
-                          ? 'border-emerald-400/70 bg-emerald-500/15 font-semibold text-emerald-300 shadow-sm shadow-emerald-500/20'
-                          : 'border-slate-800 bg-slate-900/90 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                <div className="rounded-2xl border border-slate-800/90 bg-slate-950/75 p-3">
+                  <span className="text-[11px] text-slate-400">Laba / Porsi</span>
+                  <p
+                    className={`mt-1 text-sm font-bold tabular-nums transition-all duration-300 sm:text-base ${
+                      dashboardMetrics.netProfit >= 0 ? 'text-emerald-300' : 'text-rose-400'
+                    }`}
+                  >
+                    {formatRupiah(dashboardMetrics.netProfit)}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-slate-800/90 bg-slate-950/75 p-3">
+                  <span className="text-[11px] text-slate-400">
+                    {dashboardMetrics.dailyPortions} Porsi / Hari
+                  </span>
+                  <p
+                    className={`mt-1 text-sm font-bold tabular-nums transition-all duration-300 sm:text-base ${
+                      dashboardMetrics.dailyProfit >= 0 ? 'text-cyan-300' : 'text-rose-400'
+                    }`}
+                  >
+                    {formatRupiah(dashboardMetrics.dailyProfit)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Bar Komposisi Biaya vs Laba Beranimasi */}
+              <div className="mt-4 space-y-2 rounded-2xl border border-slate-800/80 bg-slate-950/70 p-3 text-xs">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-400">Aliran dana per porsi:</span>
+                  <span
+                    className={`font-semibold transition-colors duration-300 ${
+                      isUntung ? 'text-emerald-300' : 'text-rose-300'
+                    }`}
+                  >
+                    {isUntung
+                      ? 'HPP + fee aman, sisa untung terjaga'
+                      : 'Terpotong HPP & fee, margin tergerus'}
+                  </span>
+                </div>
+
+                <div className="flex h-3 w-full overflow-hidden rounded-full bg-slate-800">
+                  <div
+                    style={{ width: `${dashboardMetrics.hppBarPct}%` }}
+                    className="bg-amber-400 transition-all duration-500 ease-out"
+                    title={`HPP: ${formatRupiah(dashboardMetrics.hpp)}`}
+                  />
+                  <div
+                    style={{ width: `${dashboardMetrics.feeBarPct}%` }}
+                    className="bg-cyan-400 transition-all duration-500 ease-out"
+                    title={`Fee kanal: ${formatRupiah(dashboardMetrics.feeAmount)}`}
+                  />
+                  <div
+                    style={{ width: `${dashboardMetrics.profitBarPct}%` }}
+                    className={`transition-all duration-500 ease-out ${
+                      isUntung ? 'bg-emerald-400' : 'bg-rose-500'
+                    }`}
+                    title={`Laba bersih: ${formatRupiah(dashboardMetrics.netProfit)}`}
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5 text-[11px] text-slate-400">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-amber-400" />
+                    HPP {formatRupiah(dashboardMetrics.hpp)}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-cyan-400" />
+                    Fee {formatRupiah(dashboardMetrics.feeAmount)}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span
+                      className={`h-2 w-2 rounded-full ${
+                        isUntung ? 'bg-emerald-400' : 'bg-rose-500'
                       }`}
-                    >
-                      <span className="block truncate">{ch.name}</span>
-                      <span className="block text-[10px] opacity-75">{ch.fee_percent}%</span>
-                    </button>
-                  );
-                })}
+                    />
+                    Bersih {formatRupiah(dashboardMetrics.netProfit)}
+                  </span>
+                </div>
               </div>
             </div>
 
-            <div
-              key={`${profitMode}-${selectedChannel?.id}`}
-              className="transition-all duration-300"
-            >
+            {/* Nota Harga HPP */}
+            <div className="rounded-3xl border border-slate-800/90 bg-gradient-to-b from-slate-900/90 via-slate-900/80 to-slate-950/90 p-5 shadow-2xl shadow-black/60 backdrop-blur-xl ring-1 ring-white/5">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
+                  Rincian Nota HPP Produk
+                </span>
+                {copiedSummary && (
+                  <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[11px] font-medium text-emerald-300">
+                    Ringkasan tersalin!
+                  </span>
+                )}
+              </div>
+
               <ReceiptCard
                 recipeName={sampleRecipe.name}
                 portions={sampleRecipe.portions}
                 calc={sampleCalc}
                 profitMode={profitMode}
                 profitValue={profitValue}
-                onChangeProfitMode={(mode) => {
-                  setProfitMode(mode);
-                  setProfitValue(mode === 'percent' ? 40 : 5000);
-                }}
-                onChangeProfitValue={(val) =>
-                  setProfitValue(Number.isFinite(val) ? Math.max(0, val) : 0)
-                }
-                selectedChannelFee={selectedChannel?.fee_percent ?? 0}
-                onChangeChannelFee={handleChannelFeeChange}
-                interactiveDemo={true}
                 onShareReceipt={handleCopySummary}
               />
             </div>
