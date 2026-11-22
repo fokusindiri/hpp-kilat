@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-paper: #F3F5F4;
+  --bg-receipt: #FCFDFF;
+  --ink-primary: #14213D;
+  --accent-cobalt: #2F54EB;
+  --highlight-yellow: #FFD84D;
+  --status-profit: #12805C;
+  --status-loss: #D7263D;
+}
+
+@layer base {
+  body {
+    background-color: var(--bg-paper);
+    color: var(--ink-primary);
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    margin: 0;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.receipt-font {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.receipt-sawtooth {
+  background-image: linear-gradient(135deg, var(--bg-receipt) 50%, transparent 50%),
+    linear-gradient(225deg, var(--bg-receipt) 50%, transparent 50%);
+  background-position: bottom left;
+  background-size: 16px 16px;
+  background-repeat: repeat-x;
+  padding-bottom: 24px;
+}
+
+@keyframes printReceipt {
+  0% {
+    transform: translateY(-18px);
+    opacity: 0.2;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-print-receipt {
+  animation: printReceipt 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-print-receipt {
+    animation: none;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-cobalt);
+  outline-offset: 2px;
+}
