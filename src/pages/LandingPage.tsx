@@ -66,6 +66,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
   );
   const [profitMode, setProfitMode] = useState<ProfitMode>(sampleRecipe.profit_mode);
   const [profitValue, setProfitValue] = useState<number>(sampleRecipe.profit_value);
+  const [guessedPrice, setGuessedPrice] = useState<number>(12000);
   const [copiedSummary, setCopiedSummary] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
@@ -124,6 +125,30 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
     );
   };
 
+  const guessedLeakStatus = useMemo(() => {
+    if (!activeChannelCalc) return null;
+    const feeRate = (activeChannelCalc.channel.fee_percent || 0) / 100;
+    const netReceived = guessedPrice * (1 - feeRate);
+    const netProfit = netReceived - sampleCalc.hpp;
+    const minPrice = activeChannelCalc.minPrice;
+
+    if (minPrice !== null && guessedPrice < minPrice) {
+      return {
+        isLeaky: true,
+        text: `Harga tebakan ${formatRupiah(guessedPrice)} masih di bawah batas aman ${formatRupiah(
+          minPrice
+        )} (laba bersih ${formatRupiah(netProfit)}).`,
+      };
+    }
+
+    return {
+      isLeaky: false,
+      text: `Harga tebakan ${formatRupiah(
+        guessedPrice
+      )} sudah melewati batas aman channel ini (estimasi laba bersih ${formatRupiah(netProfit)}).`,
+    };
+  }, [activeChannelCalc, guessedPrice, sampleCalc.hpp]);
+
   const handleCopySummary = async () => {
     const minPriceText =
       activeChannelCalc && !activeChannelCalc.impossibleMargin && activeChannelCalc.minPrice !== null
@@ -135,7 +160,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
       `Modal per porsi: ${formatRupiah(sampleCalc.hpp)}`,
       `Channel ${activeChannelCalc?.channel.name ?? 'Utama'} (Fee ${
         activeChannelCalc?.channel.fee_percent ?? 0
-      }%): Harga jual min ${minPriceText}`,
+      }%): Batas aman ${minPriceText}`,
     ].join('\n');
 
     try {
@@ -213,7 +238,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
           className="pointer-events-none absolute right-0 top-28 h-80 w-80 rounded-full bg-cyan-500/15 blur-3xl"
         />
 
-        {/* Hero & Simulasi Nota */}
+        {/* Hero & Cek Aman Harga Jual Sebelum Rilis Menu */}
         <section className="relative z-10 grid gap-10 lg:grid-cols-2 lg:items-start">
           <div className="space-y-6">
             <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3.5 py-1 text-xs font-medium text-emerald-300 shadow-sm shadow-emerald-500/10">
@@ -229,9 +254,9 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             </h1>
 
             <p className="text-base leading-relaxed text-slate-300">
-              Hitung biaya bahan baku per porsi, cek potongan fee GoFood, GrabFood, dan
-              ShopeeFood, lalu tentukan harga jual yang aman untuk usaha makanan dan minuman tanpa
-              ribet hitung manual.
+              Banyak jualan yang kelihatannya ramai tapi marginnya bocor karena harga cuma ikut
+              kompetitor atau tebakan modal. Hitung gramasi bahan, kemasan, dan potongan aplikasi
+              sebelum mulai jualan.
             </p>
 
             <div className="flex flex-wrap gap-3">
@@ -250,56 +275,54 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 Login / Daftar Akun
               </button>
             </div>
-
-            <div className="grid grid-cols-3 gap-3 pt-1 text-xs">
-              <div className="rounded-2xl border border-slate-800/90 bg-slate-900/60 p-3.5 backdrop-blur">
-                <p className="text-slate-400">Modal / Porsi</p>
-                <p className="mt-1 text-base font-bold text-white tabular-nums">
-                  {formatRupiah(sampleCalc.hpp)}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-800/90 bg-slate-900/60 p-3.5 backdrop-blur">
-                <p className="text-slate-400">Bahan + Kemasan</p>
-                <p className="mt-1 text-base font-bold text-emerald-300 tabular-nums">
-                  {formatRupiah(
-                    sampleCalc.ingredientSubtotalPerPortion + sampleCalc.packagingSubtotalPerPortion
-                  )}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-800/90 bg-slate-900/60 p-3.5 backdrop-blur">
-                <p className="text-slate-400">Channel Aktif</p>
-                <p className="mt-1 truncate text-base font-bold text-cyan-300">
-                  {selectedChannel?.name ?? '-'}
-                </p>
-              </div>
-            </div>
           </div>
 
-          {/* Kartu Simulasi Interaktif + Nota */}
+          {/* Kartu Cek Kebocoran Harga Jual Sebelum Buka Lapak */}
           <div className="rounded-3xl border border-slate-800/90 bg-gradient-to-b from-slate-900/90 via-slate-900/80 to-slate-950/90 p-5 shadow-2xl shadow-black/60 backdrop-blur-xl ring-1 ring-white/5 transition duration-300 hover:border-emerald-400/35">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
-                  Contoh Simulasi Nota HPP
-                </span>
-                <p className="text-[11px] text-slate-400">
-                  Pilih channel &amp; atur target untung langsung di bawah
-                </p>
-              </div>
-              <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-medium text-emerald-300">
-                Live Preview
+            <div className="mb-4">
+              <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
+                Cek Aman Harga Jual Sebelum Rilis Menu
               </span>
+              <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                Bandingkan harga tebakanmu vs batas aman setelah bahan, kemasan, &amp; fee channel
+              </p>
             </div>
 
-            <div className="mb-4 rounded-2xl border border-slate-800/90 bg-slate-950/75 p-3 text-xs">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-slate-400">Simulasi Channel:</span>
-                {copiedSummary && (
-                  <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[11px] font-medium text-emerald-300">
-                    Ringkasan tersalin!
-                  </span>
-                )}
+            <div className="mb-4 space-y-3 rounded-2xl border border-slate-800/90 bg-slate-950/75 p-3 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <label htmlFor="tebakan-harga" className="text-slate-300">
+                  Coba harga tebakan jualanmu (Rp):
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="tebakan-harga"
+                    type="number"
+                    min={0}
+                    step={500}
+                    value={guessedPrice}
+                    onChange={(e) => setGuessedPrice(Math.max(0, Number(e.target.value) || 0))}
+                    className="w-28 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-right font-semibold text-white tabular-nums"
+                  />
+                  {copiedSummary && (
+                    <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[11px] font-medium text-emerald-300">
+                      Tersalin!
+                    </span>
+                  )}
+                </div>
               </div>
+
+              {guessedLeakStatus && (
+                <p
+                  className={`rounded-xl border px-3 py-2 text-[11px] leading-relaxed ${
+                    guessedLeakStatus.isLeaky
+                      ? 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+                      : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                  }`}
+                >
+                  {guessedLeakStatus.text}
+                </p>
+              )}
+
               <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
                 {channels.map((ch) => {
                   const active = ch.id === selectedChannel?.id;
