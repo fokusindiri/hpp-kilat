@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ReceiptCard } from '../components/ReceiptCard';
+import { UpgradeModal } from '../components/UpgradeModal';
 import { DEMO_CHANNELS, DEMO_INGREDIENTS, DEMO_RECIPE } from '../lib/demoData';
 import { calculateRecipePricing, formatRupiah } from '../lib/pricing';
 import type { Channel, ProfitMode, RecipeCalculation } from '../types';
@@ -66,6 +67,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
   const [profitMode, setProfitMode] = useState<ProfitMode>(sampleRecipe.profit_mode);
   const [profitValue, setProfitValue] = useState<number>(sampleRecipe.profit_value);
   const [copiedSummary, setCopiedSummary] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   // State testimoni auto-geser: berhenti otomatis ketika diklik
   const [activeTestimonialIdx, setActiveTestimonialIdx] = useState(0);
@@ -175,7 +177,32 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
         </div>
       </header>
 
-      <main className="relative mx-auto max-w-6xl space-y-16 px-4 py-12">
+      <main className="relative mx-auto max-w-6xl space-y-12 px-4 py-8 sm:space-y-16 sm:py-12">
+        {/* Banner Promo 10 UMKM Tercepat */}
+        <div className="relative z-10 flex flex-col items-start justify-between gap-3 rounded-2xl border border-amber-400/35 bg-gradient-to-r from-amber-400/10 via-emerald-500/10 to-teal-500/10 px-4 py-3.5 text-xs shadow-lg shadow-black/30 backdrop-blur-xl sm:flex-row sm:items-center sm:px-5 sm:text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-amber-400/40 bg-amber-400/15 px-2.5 py-0.5 text-[11px] font-bold text-amber-300">
+              PROMO 10 UMKM TERCEPAT
+            </span>
+            <span className="text-slate-200">
+              Paket Pro Bulanan{' '}
+              <span className="line-through text-slate-500 tabular-nums">Rp50.000</span>{' '}
+              <strong className="font-bold text-emerald-300 tabular-nums">
+                Rp20.000 / 1 bulan
+              </strong>{' '}
+              untuk akses tanpa batas.
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowUpgradeModal(true)}
+            className="shrink-0 rounded-xl bg-gradient-to-r from-amber-300 to-amber-400 px-4 py-2 text-xs font-bold text-slate-950 shadow transition hover:-translate-y-0.5 hover:brightness-105"
+          >
+            Lihat Detail Promo →
+          </button>
+        </div>
+
         {/* Efek ambient glow modern */}
         <div
           aria-hidden="true"
@@ -203,7 +230,8 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
 
             <p className="text-base leading-relaxed text-slate-300">
               Hitung biaya bahan baku per porsi, cek potongan fee GoFood, GrabFood, dan
-              ShopeeFood, lalu tentukan harga jual yang aman tanpa ribet hitung manual.
+              ShopeeFood, lalu tentukan harga jual yang aman untuk usaha makanan dan minuman tanpa
+              ribet hitung manual.
             </p>
 
             <div className="flex flex-wrap gap-3">
@@ -426,7 +454,6 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             </div>
           </div>
 
-          {/* Indikator navigasi slide (klik langsung menghentikan auto-geser) */}
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               {TESTIMONIALS.map((item, idx) => {
@@ -472,6 +499,13 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
           </div>
         </section>
       </main>
+
+      <UpgradeModal
+        open={showUpgradeModal}
+        reason="Buka akses tanpa batas resep, bahan baku, dan channel penjualan di HPP-Kilat Pro."
+        onClose={() => setShowUpgradeModal(false)}
+        onGoToAuth={() => onNavigate('/masuk')}
+      />
     </div>
   );
 }
