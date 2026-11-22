@@ -39,7 +39,7 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
     >
       <div className="border-b border-dashed border-[rgba(20,33,61,0.28)] pb-3">
         <div className="flex items-center justify-between text-xs">
-          <span>NOTA HARGA • HPP-KILAT</span>
+          <span>NOTA HARGA &bull; HPP-KILAT</span>
           <span>{portions} PORSI</span>
         </div>
         <h3 className="mt-1 text-base font-semibold tracking-tight">
