@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ReceiptCard } from '../components/ReceiptCard';
 import { UpgradeModal } from '../components/UpgradeModal';
 import { DEMO_CHANNELS, DEMO_INGREDIENTS, DEMO_RECIPE } from '../lib/demoData';
 import { calculateNetProfit, calculateRecipePricing, formatRupiah } from '../lib/pricing';
-import type { ProfitMode, RecipeCalculation } from '../types';
+import type { RecipeCalculation } from '../types';
 
 interface LandingPageProps {
   onNavigate: (to: string) => void;
@@ -62,9 +61,6 @@ type DashboardScenario = 'rugi' | 'untung';
 export function LandingPage({ onNavigate }: LandingPageProps) {
   const sampleRecipe = DEMO_RECIPE;
 
-  const [profitMode] = useState<ProfitMode>(sampleRecipe.profit_mode);
-  const [profitValue] = useState<number>(sampleRecipe.profit_value);
-  const [copiedSummary, setCopiedSummary] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   // State animasi dashboard: Jualan Rugi vs Jualan Untung
@@ -111,13 +107,13 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
       ingredients: DEMO_INGREDIENTS,
       portions: sampleRecipe.portions,
       extraCost: sampleRecipe.extra_cost,
-      profitMode,
-      profitValue,
+      profitMode: sampleRecipe.profit_mode,
+      profitValue: sampleRecipe.profit_value,
       channels: DEMO_CHANNELS,
       roundingStep: 500,
       customPricesByChannel: {},
     });
-  }, [sampleRecipe, profitMode, profitValue]);
+  }, [sampleRecipe]);
 
   const appChannelCalc =
     sampleCalc.channels.find((c) => c.channel.id === 'ch-gofood') ?? sampleCalc.channels[0];
@@ -153,22 +149,6 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
       profitBarPct,
     };
   }, [sampleCalc.hpp, appChannelCalc?.minPrice, scenario, feePercent]);
-
-  const handleCopySummary = async () => {
-    const summary = [
-      `Simulasi HPP - ${sampleRecipe.name} (${sampleRecipe.portions} porsi)`,
-      `Modal per porsi (HPP): ${formatRupiah(sampleCalc.hpp)}`,
-      `Harga aman aplikasi (${feePercent}% fee): ${formatRupiah(dashboardMetrics.safeMinPrice)}`,
-    ].join('\n');
-
-    try {
-      await navigator.clipboard.writeText(summary);
-      setCopiedSummary(true);
-      window.setTimeout(() => setCopiedSummary(false), 2000);
-    } catch {
-      setCopiedSummary(false);
-    }
-  };
 
   const isUntung = scenario === 'untung';
 
@@ -239,7 +219,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
         />
 
         {/* Hero & Animasi Dashboard Jualan Untung vs Jualan Rugi */}
-        <section className="relative z-10 grid gap-10 lg:grid-cols-2 lg:items-start">
+        <section className="relative z-10 grid gap-10 lg:grid-cols-2 lg:items-center">
           <div className="space-y-6">
             <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3.5 py-1 text-xs font-medium text-emerald-300 shadow-sm shadow-emerald-500/10">
               <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
@@ -277,180 +257,155 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             </div>
           </div>
 
-          <div className="space-y-5">
-            {/* Animasi Dashboard: Jualan Untung vs Jualan Rugi */}
-            <div
-              className={`rounded-3xl border p-5 shadow-2xl backdrop-blur-xl transition-all duration-500 ${
-                isUntung
-                  ? 'border-emerald-400/40 bg-gradient-to-b from-slate-900/95 via-emerald-950/20 to-slate-950/95 shadow-emerald-950/40'
-                  : 'border-rose-400/35 bg-gradient-to-b from-slate-900/95 via-rose-950/20 to-slate-950/95 shadow-rose-950/40'
-              }`}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
+          {/* Animasi Dashboard: Jualan Untung vs Jualan Rugi */}
+          <div
+            className={`rounded-3xl border p-5 shadow-2xl backdrop-blur-xl transition-all duration-500 ${
+              isUntung
+                ? 'border-emerald-400/40 bg-gradient-to-b from-slate-900/95 via-emerald-950/20 to-slate-950/95 shadow-emerald-950/40'
+                : 'border-rose-400/35 bg-gradient-to-b from-slate-900/95 via-rose-950/20 to-slate-950/95 shadow-rose-950/40'
+            }`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <span
+                  className={`inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider transition-colors duration-300 ${
+                    isUntung ? 'text-emerald-300' : 'text-rose-300'
+                  }`}
+                >
                   <span
-                    className={`inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider transition-colors duration-300 ${
-                      isUntung ? 'text-emerald-300' : 'text-rose-300'
+                    className={`h-2 w-2 rounded-full ${
+                      isUntung ? 'animate-ping bg-emerald-400' : 'animate-pulse bg-rose-400'
                     }`}
-                  >
-                    <span
-                      className={`h-2 w-2 rounded-full ${
-                        isUntung ? 'animate-ping bg-emerald-400' : 'animate-pulse bg-rose-400'
-                      }`}
-                    />
-                    {isUntung
-                      ? 'Simulasi: Jualan Untung (Pakai Hitung HPP)'
-                      : 'Simulasi: Jualan Rugi (Harga Asal Tebak)'}
-                  </span>
-                  <p className="mt-0.5 text-[11px] text-slate-400">
-                    Contoh: {sampleRecipe.name} &bull; Fee kanal {feePercent}%
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-1.5 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => handleSelectScenario('rugi')}
-                    className={`rounded-lg px-2.5 py-1 font-semibold transition ${
-                      !isUntung
-                        ? 'bg-rose-500 text-white shadow-sm shadow-rose-500/30'
-                        : 'bg-slate-800/80 text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    Rugi
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSelectScenario('untung')}
-                    className={`rounded-lg px-2.5 py-1 font-semibold transition ${
-                      isUntung
-                        ? 'bg-emerald-400 text-slate-950 shadow-sm shadow-emerald-400/30'
-                        : 'bg-slate-800/80 text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    Untung
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsDashboardAuto((prev) => !prev)}
-                    className="rounded-lg border border-slate-700/80 bg-slate-900/90 px-2.5 py-1 text-[11px] font-medium text-slate-300 transition hover:border-slate-500"
-                  >
-                    {isDashboardAuto ? 'Jeda' : 'Auto'}
-                  </button>
-                </div>
+                  />
+                  {isUntung
+                    ? 'Simulasi: Jualan Untung (Pakai Hitung HPP)'
+                    : 'Simulasi: Jualan Rugi (Harga Asal Tebak)'}
+                </span>
+                <p className="mt-0.5 text-[11px] text-slate-400">
+                  Contoh: {sampleRecipe.name} &bull; Fee kanal {feePercent}%
+                </p>
               </div>
 
-              {/* Kartu Angka Utama Beranimasi */}
-              <div className="mt-4 grid grid-cols-3 gap-2.5 text-xs">
-                <div className="rounded-2xl border border-slate-800/90 bg-slate-950/75 p-3">
-                  <span className="text-[11px] text-slate-400">Harga Jual</span>
-                  <p className="mt-1 text-sm font-bold text-white tabular-nums transition-all duration-300 sm:text-base">
-                    {formatRupiah(dashboardMetrics.activePrice)}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-slate-800/90 bg-slate-950/75 p-3">
-                  <span className="text-[11px] text-slate-400">Laba / Porsi</span>
-                  <p
-                    className={`mt-1 text-sm font-bold tabular-nums transition-all duration-300 sm:text-base ${
-                      dashboardMetrics.netProfit >= 0 ? 'text-emerald-300' : 'text-rose-400'
-                    }`}
-                  >
-                    {formatRupiah(dashboardMetrics.netProfit)}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-slate-800/90 bg-slate-950/75 p-3">
-                  <span className="text-[11px] text-slate-400">
-                    {dashboardMetrics.dailyPortions} Porsi / Hari
-                  </span>
-                  <p
-                    className={`mt-1 text-sm font-bold tabular-nums transition-all duration-300 sm:text-base ${
-                      dashboardMetrics.dailyProfit >= 0 ? 'text-cyan-300' : 'text-rose-400'
-                    }`}
-                  >
-                    {formatRupiah(dashboardMetrics.dailyProfit)}
-                  </p>
-                </div>
-              </div>
-
-              {/* Bar Komposisi Biaya vs Laba Beranimasi */}
-              <div className="mt-4 space-y-2 rounded-2xl border border-slate-800/80 bg-slate-950/70 p-3 text-xs">
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-slate-400">Aliran dana per porsi:</span>
-                  <span
-                    className={`font-semibold transition-colors duration-300 ${
-                      isUntung ? 'text-emerald-300' : 'text-rose-300'
-                    }`}
-                  >
-                    {isUntung
-                      ? 'HPP + fee aman, sisa untung terjaga'
-                      : 'Terpotong HPP & fee, margin tergerus'}
-                  </span>
-                </div>
-
-                <div className="flex h-3 w-full overflow-hidden rounded-full bg-slate-800">
-                  <div
-                    style={{ width: `${dashboardMetrics.hppBarPct}%` }}
-                    className="bg-amber-400 transition-all duration-500 ease-out"
-                    title={`HPP: ${formatRupiah(dashboardMetrics.hpp)}`}
-                  />
-                  <div
-                    style={{ width: `${dashboardMetrics.feeBarPct}%` }}
-                    className="bg-cyan-400 transition-all duration-500 ease-out"
-                    title={`Fee kanal: ${formatRupiah(dashboardMetrics.feeAmount)}`}
-                  />
-                  <div
-                    style={{ width: `${dashboardMetrics.profitBarPct}%` }}
-                    className={`transition-all duration-500 ease-out ${
-                      isUntung ? 'bg-emerald-400' : 'bg-rose-500'
-                    }`}
-                    title={`Laba bersih: ${formatRupiah(dashboardMetrics.netProfit)}`}
-                  />
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5 text-[11px] text-slate-400">
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-amber-400" />
-                    HPP {formatRupiah(dashboardMetrics.hpp)}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-cyan-400" />
-                    Fee {formatRupiah(dashboardMetrics.feeAmount)}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span
-                      className={`h-2 w-2 rounded-full ${
-                        isUntung ? 'bg-emerald-400' : 'bg-rose-500'
-                      }`}
-                    />
-                    Bersih {formatRupiah(dashboardMetrics.netProfit)}
-                  </span>
-                </div>
+              <div className="flex items-center gap-1.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => handleSelectScenario('rugi')}
+                  className={`rounded-lg px-2.5 py-1 font-semibold transition ${
+                    !isUntung
+                      ? 'bg-rose-500 text-white shadow-sm shadow-rose-500/30'
+                      : 'bg-slate-800/80 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Rugi
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectScenario('untung')}
+                  className={`rounded-lg px-2.5 py-1 font-semibold transition ${
+                    isUntung
+                      ? 'bg-emerald-400 text-slate-950 shadow-sm shadow-emerald-400/30'
+                      : 'bg-slate-800/80 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Untung
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsDashboardAuto((prev) => !prev)}
+                  className="rounded-lg border border-slate-700/80 bg-slate-900/90 px-2.5 py-1 text-[11px] font-medium text-slate-300 transition hover:border-slate-500"
+                >
+                  {isDashboardAuto ? 'Jeda' : 'Auto'}
+                </button>
               </div>
             </div>
 
-            {/* Nota Harga HPP */}
-            <div className="rounded-3xl border border-slate-800/90 bg-gradient-to-b from-slate-900/90 via-slate-900/80 to-slate-950/90 p-5 shadow-2xl shadow-black/60 backdrop-blur-xl ring-1 ring-white/5">
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
-                  Rincian Nota HPP Produk
-                </span>
-                {copiedSummary && (
-                  <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[11px] font-medium text-emerald-300">
-                    Ringkasan tersalin!
-                  </span>
-                )}
+            {/* Kartu Angka Utama Beranimasi */}
+            <div className="mt-4 grid grid-cols-3 gap-2.5 text-xs">
+              <div className="rounded-2xl border border-slate-800/90 bg-slate-950/75 p-3">
+                <span className="text-[11px] text-slate-400">Harga Jual</span>
+                <p className="mt-1 text-sm font-bold text-white tabular-nums transition-all duration-300 sm:text-base">
+                  {formatRupiah(dashboardMetrics.activePrice)}
+                </p>
               </div>
 
-              <ReceiptCard
-                recipeName={sampleRecipe.name}
-                portions={sampleRecipe.portions}
-                calc={sampleCalc}
-                profitMode={profitMode}
-                profitValue={profitValue}
-                onShareReceipt={handleCopySummary}
-              />
+              <div className="rounded-2xl border border-slate-800/90 bg-slate-950/75 p-3">
+                <span className="text-[11px] text-slate-400">Laba / Porsi</span>
+                <p
+                  className={`mt-1 text-sm font-bold tabular-nums transition-all duration-300 sm:text-base ${
+                    dashboardMetrics.netProfit >= 0 ? 'text-emerald-300' : 'text-rose-400'
+                  }`}
+                >
+                  {formatRupiah(dashboardMetrics.netProfit)}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-800/90 bg-slate-950/75 p-3">
+                <span className="text-[11px] text-slate-400">
+                  {dashboardMetrics.dailyPortions} Porsi / Hari
+                </span>
+                <p
+                  className={`mt-1 text-sm font-bold tabular-nums transition-all duration-300 sm:text-base ${
+                    dashboardMetrics.dailyProfit >= 0 ? 'text-cyan-300' : 'text-rose-400'
+                  }`}
+                >
+                  {formatRupiah(dashboardMetrics.dailyProfit)}
+                </p>
+              </div>
+            </div>
+
+            {/* Bar Komposisi Biaya vs Laba Beranimasi */}
+            <div className="mt-4 space-y-2 rounded-2xl border border-slate-800/80 bg-slate-950/70 p-3 text-xs">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-slate-400">Aliran dana per porsi:</span>
+                <span
+                  className={`font-semibold transition-colors duration-300 ${
+                    isUntung ? 'text-emerald-300' : 'text-rose-300'
+                  }`}
+                >
+                  {isUntung
+                    ? 'HPP + fee aman, sisa untung terjaga'
+                    : 'Terpotong HPP & fee, margin tergerus'}
+                </span>
+              </div>
+
+              <div className="flex h-3 w-full overflow-hidden rounded-full bg-slate-800">
+                <div
+                  style={{ width: `${dashboardMetrics.hppBarPct}%` }}
+                  className="bg-amber-400 transition-all duration-500 ease-out"
+                  title={`HPP: ${formatRupiah(dashboardMetrics.hpp)}`}
+                />
+                <div
+                  style={{ width: `${dashboardMetrics.feeBarPct}%` }}
+                  className="bg-cyan-400 transition-all duration-500 ease-out"
+                  title={`Fee kanal: ${formatRupiah(dashboardMetrics.feeAmount)}`}
+                />
+                <div
+                  style={{ width: `${dashboardMetrics.profitBarPct}%` }}
+                  className={`transition-all duration-500 ease-out ${
+                    isUntung ? 'bg-emerald-400' : 'bg-rose-500'
+                  }`}
+                  title={`Laba bersih: ${formatRupiah(dashboardMetrics.netProfit)}`}
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5 text-[11px] text-slate-400">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-amber-400" />
+                  HPP {formatRupiah(dashboardMetrics.hpp)}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-cyan-400" />
+                  Fee {formatRupiah(dashboardMetrics.feeAmount)}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    className={`h-2 w-2 rounded-full ${
+                      isUntung ? 'bg-emerald-400' : 'bg-rose-500'
+                    }`}
+                  />
+                  Bersih {formatRupiah(dashboardMetrics.netProfit)}
+                </span>
+              </div>
             </div>
           </div>
         </section>
