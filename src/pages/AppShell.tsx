@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ThemeToggleButton } from '../components/ThemeToggleButton';
 import { UpgradeModal } from '../components/UpgradeModal';
 import { DEMO_CHANNELS, DEMO_INGREDIENTS, DEMO_RECIPE } from '../lib/demoData';
 import { calculateNetProfit, calculateRecipePricing, ceilToStep, formatRupiah } from '../lib/pricing';
 import { supabase } from '../lib/supabase';
+import { useTheme } from '../lib/theme';
 import type {
   Category,
   Channel,
@@ -21,18 +23,15 @@ interface AppShellProps {
 type PricePreset = 'bagus' | 'sangat_bagus' | 'profitable' | 'custom';
 
 interface ProductSimState {
-  // Fitur 1: Operasional & Batch
   batchQty: number;
   dailyWage: number;
   dailyOutput: number;
   monthlyOverhead: number;
   monthlyOutput: number;
-  // Fitur 2 & 3: Channel & Simulasi Terjual
   selectedChannelId: string;
   pricePreset: PricePreset;
   customUnitPrice: number;
   soldUnits: number;
-  // Fitur 4: Batch acuan BEP
   bepBatchUnits: number;
 }
 
@@ -60,6 +59,23 @@ function createDefaultSim(recipe: Recipe): ProductSimState {
 }
 
 export function AppShell({ onNavigate }: AppShellProps) {
+  const { isDark } = useTheme();
+
+  const surfaceCard = isDark
+    ? 'border-slate-800 bg-slate-900/75 text-slate-100'
+    : 'border-slate-200 bg-white text-slate-900 shadow-xs';
+
+  const nestedBox = isDark
+    ? 'border-slate-800 bg-slate-950/80'
+    : 'border-slate-200/90 bg-slate-50';
+
+  const fieldInput = isDark
+    ? 'border-slate-700 bg-slate-950 text-white placeholder-slate-500 focus:border-emerald-400'
+    : 'border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 focus:border-emerald-500 focus:bg-white';
+
+  const mutedText = isDark ? 'text-slate-400' : 'text-slate-500';
+  const headingText = isDark ? 'text-white' : 'text-slate-900';
+
   const [ingredients, setIngredients] = useState<Ingredient[]>(DEMO_INGREDIENTS);
   const [recipes, setRecipes] = useState<Recipe[]>([DEMO_RECIPE]);
   const [selectedId, setSelectedId] = useState<string>(DEMO_RECIPE.id);
@@ -77,11 +93,8 @@ export function AppShell({ onNavigate }: AppShellProps) {
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [showUpgrade, setShowUpgrade] = useState(false);
-
-  // Input tambah produk baru ke Daftar Produk / Resep
   const [newProductName, setNewProductName] = useState('');
 
-  // Form tambah bahan baku / kemasan yang dibeli (Fitur 1)
   const [newIngName, setNewIngName] = useState('');
   const [newIngCategory, setNewIngCategory] = useState<Category>('bahan');
   const [newIngUnit, setNewIngUnit] = useState<Unit>('gr');
@@ -135,7 +148,6 @@ export function AppShell({ onNavigate }: AppShellProps) {
     });
   };
 
-  // Biaya operasional per unit: Tenaga Kerja + Overhead
   const laborCostPerUnit = useMemo(() => {
     const safeOutput = activeSim.dailyOutput > 0 ? activeSim.dailyOutput : 1;
     return activeSim.dailyWage / safeOutput;
@@ -148,7 +160,6 @@ export function AppShell({ onNavigate }: AppShellProps) {
 
   const operationalCostPerUnit = laborCostPerUnit + overheadCostPerUnit;
 
-  // Perhitungan inti resep & channel
   const activeCalc = useMemo<RecipeCalculation>(() => {
     if (!activeRecipe) {
       return {
@@ -178,7 +189,6 @@ export function AppShell({ onNavigate }: AppShellProps) {
     });
   }, [activeRecipe, ingredients, operationalCostPerUnit, channels, roundingStep]);
 
-  // Ringkasan Fitur 1: Total Pembelian Bahan, Total Biaya Lain, Biaya Produksi Total, HPP per Produk
   const batchQty = Math.max(1, activeSim.batchQty || 1);
 
   const productionSummary = useMemo(() => {
@@ -199,7 +209,6 @@ export function AppShell({ onNavigate }: AppShellProps) {
     };
   }, [activeCalc, batchQty, operationalCostPerUnit, activeRecipe?.extra_cost]);
 
-  // Fitur 2: Saran Harga Jual (Bagus, Sangat Bagus, Profitable) per Channel
   const channelSuggestions = useMemo(() => {
     const hpp = productionSummary.hppPerUnit;
 
@@ -207,9 +216,6 @@ export function AppShell({ onNavigate }: AppShellProps) {
       const feeRate = Math.min(0.9, Math.max(0, ch.fee_percent / 100));
       const denomBase = 1 - feeRate;
 
-      // Bagus: margin sehat ~45% (standar minimum F&B sehat)
-      // Sangat Bagus: margin ~52%
-      // Profitable: margin ~60%
       const calcForMargin = (targetMarginPct: number) => {
         const marginRate = targetMarginPct / 100;
         const denom = 1 - feeRate - marginRate;
@@ -226,15 +232,11 @@ export function AppShell({ onNavigate }: AppShellProps) {
         return { price, profit, margin };
       };
 
-      const bagus = calcForMargin(45);
-      const sangatBagus = calcForMargin(52);
-      const profitable = calcForMargin(60);
-
       return {
         channel: ch,
-        bagus,
-        sangatBagus,
-        profitable,
+        bagus: calcForMargin(45),
+        sangatBagus: calcForMargin(52),
+        profitable: calcForMargin(60),
       };
     });
   }, [channels, productionSummary.hppPerUnit, roundingStep]);
@@ -243,7 +245,6 @@ export function AppShell({ onNavigate }: AppShellProps) {
     channelSuggestions.find((item) => item.channel.id === activeSim.selectedChannelId) ??
     channelSuggestions[0];
 
-  // Fitur 3: Harga jual terpilih (Bagus / Sangat Bagus / Profitable / Custom) & simulasi terjual
   const selectedUnitPrice = useMemo(() => {
     if (!activeChannelSuggestion) return activeSim.customUnitPrice;
     if (activeSim.pricePreset === 'bagus') return activeChannelSuggestion.bagus.price;
@@ -273,7 +274,6 @@ export function AppShell({ onNavigate }: AppShellProps) {
   const totalProfitFromSold = profitPerUnit * soldUnits;
   const totalRevenueFromSold = selectedUnitPrice * soldUnits;
 
-  // Fitur 4: Simulasi BEP / Balik Modal
   const bepSim = useMemo(() => {
     const bepBatch = Math.max(1, activeSim.bepBatchUnits || batchQty);
     const totalCostForBepBatch = productionSummary.hppPerUnit * bepBatch;
@@ -309,7 +309,6 @@ export function AppShell({ onNavigate }: AppShellProps) {
     };
   }, [activeSim.bepBatchUnits, batchQty, productionSummary.hppPerUnit, profitPerUnit, selectedUnitPrice]);
 
-  // Handler tambah produk ke Daftar Produk / Resep
   const handleAddProduct = () => {
     const cleanName = newProductName.trim() || `Produk Baru ${recipes.length + 1}`;
     const newId = `rec-${Date.now()}`;
@@ -355,7 +354,6 @@ export function AppShell({ onNavigate }: AppShellProps) {
     }
   };
 
-  // Handler tambah bahan / kemasan ke daftar & resep aktif
   const handleAddIngredient = () => {
     const cleanName = newIngName.trim();
     if (!cleanName || newIngBuyQty <= 0) return;
@@ -422,7 +420,11 @@ export function AppShell({ onNavigate }: AppShellProps) {
   const isHealthyMargin = selectedMarginPct >= 45 && profitPerUnit > 0;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 print:bg-white print:text-slate-900">
+    <div
+      className={`min-h-screen transition-colors duration-300 print:bg-white print:text-slate-900 ${
+        isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
+      }`}
+    >
       <style>{`
         @media print {
           .no-print { display: none !important; }
@@ -436,7 +438,13 @@ export function AppShell({ onNavigate }: AppShellProps) {
       `}</style>
 
       {/* Topbar */}
-      <header className="no-print sticky top-0 z-30 border-b border-slate-800/80 bg-slate-950/85 backdrop-blur-xl">
+      <header
+        className={`no-print sticky top-0 z-30 border-b backdrop-blur-xl transition-colors duration-300 ${
+          isDark
+            ? 'border-slate-800/80 bg-slate-950/85'
+            : 'border-slate-200/90 bg-white/85'
+        }`}
+      >
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3.5">
           <div className="flex flex-wrap items-center gap-3">
             <button
@@ -446,26 +454,41 @@ export function AppShell({ onNavigate }: AppShellProps) {
             >
               HPP-Kilat
             </button>
-            <span className="text-xs text-slate-400">
+            <span className={`text-xs ${mutedText}`}>
               {userEmail ? `Akun: ${userEmail}` : 'Mode Uji Coba / Tamu'}
             </span>
-            <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300">
+            <span
+              className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${
+                isDark
+                  ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300'
+                  : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+              }`}
+            >
               Standar Margin F&amp;B Sehat &gt; 45%
             </span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <ThemeToggleButton />
             <button
               type="button"
               onClick={handleExportPdf}
-              className="rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-3.5 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
+              className={`rounded-lg border px-3.5 py-2 text-xs font-semibold transition ${
+                isDark
+                  ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
+                  : 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+              }`}
             >
               Ekspor PDF
             </button>
             <button
               type="button"
               onClick={() => setShowUpgrade(true)}
-              className="rounded-lg border border-amber-400/40 bg-amber-400/15 px-3.5 py-2 text-xs font-semibold text-amber-300 transition hover:bg-amber-400/25"
+              className={`rounded-lg border px-3.5 py-2 text-xs font-semibold transition ${
+                isDark
+                  ? 'border-amber-400/40 bg-amber-400/15 text-amber-300 hover:bg-amber-400/25'
+                  : 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100'
+              }`}
             >
               Upgrade Pro
             </button>
@@ -483,13 +506,17 @@ export function AppShell({ onNavigate }: AppShellProps) {
       <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 lg:grid-cols-12">
         {/* Kolom Kiri: Daftar Produk / Resep & Catatan Margin Sehat */}
         <aside className="no-print space-y-5 lg:col-span-3">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/75 p-4">
+          <div className={`rounded-2xl border p-4 ${surfaceCard}`}>
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-bold text-white">Daftar Produk / Resep</h2>
+              <h2 className={`text-sm font-bold ${headingText}`}>Daftar Produk / Resep</h2>
               <button
                 type="button"
                 onClick={handleDuplicateRecipe}
-                className="rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-[11px] font-medium text-slate-200 hover:border-emerald-400/50"
+                className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium ${
+                  isDark
+                    ? 'border-slate-700 bg-slate-800/80 text-slate-200 hover:border-emerald-400/50'
+                    : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-emerald-400'
+                }`}
               >
                 + Duplikat
               </button>
@@ -501,7 +528,7 @@ export function AppShell({ onNavigate }: AppShellProps) {
                 value={newProductName}
                 onChange={(e) => setNewProductName(e.target.value)}
                 placeholder="Nama menu / produk..."
-                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white placeholder-slate-500 focus:border-emerald-400 focus:outline-none"
+                className={`w-full rounded-xl border px-3 py-2 text-xs focus:outline-none ${fieldInput}`}
               />
               <button
                 type="button"
@@ -520,8 +547,12 @@ export function AppShell({ onNavigate }: AppShellProps) {
                     key={rec.id}
                     className={`flex items-center justify-between gap-2 rounded-xl border p-2.5 text-xs transition ${
                       isSelected
-                        ? 'border-emerald-400/60 bg-emerald-500/10 text-white'
-                        : 'border-slate-800 bg-slate-950/70 text-slate-300 hover:border-slate-700'
+                        ? isDark
+                          ? 'border-emerald-400/60 bg-emerald-500/10 text-white'
+                          : 'border-emerald-400 bg-emerald-50/80 text-slate-900'
+                        : isDark
+                        ? 'border-slate-800 bg-slate-950/70 text-slate-300 hover:border-slate-700'
+                        : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300'
                     }`}
                   >
                     <button
@@ -530,7 +561,7 @@ export function AppShell({ onNavigate }: AppShellProps) {
                       className="min-w-0 flex-1 text-left"
                     >
                       <p className="truncate font-semibold">{rec.name}</p>
-                      <p className="mt-0.5 text-[11px] text-slate-400">
+                      <p className={`mt-0.5 text-[11px] ${mutedText}`}>
                         Batch: {simByRecipe[rec.id]?.batchQty ?? 100} unit
                       </p>
                     </button>
@@ -539,7 +570,7 @@ export function AppShell({ onNavigate }: AppShellProps) {
                         type="button"
                         onClick={() => handleDeleteRecipe(rec.id)}
                         aria-label={`Hapus ${rec.name}`}
-                        className="rounded-lg px-1.5 py-1 text-[11px] text-slate-400 hover:bg-rose-500/15 hover:text-rose-300"
+                        className="rounded-lg px-1.5 py-1 text-[11px] text-slate-400 hover:bg-rose-500/15 hover:text-rose-500"
                       >
                         ✕
                       </button>
@@ -550,19 +581,32 @@ export function AppShell({ onNavigate }: AppShellProps) {
             </div>
           </div>
 
-          {/* Keterangan Margin Sehat F&B > 45% */}
-          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-4 text-xs">
-            <p className="font-bold text-emerald-300">Acuan Margin Sehat F&amp;B (&gt; 45%)</p>
-            <p className="mt-1.5 leading-relaxed text-slate-300">
+          <div
+            className={`rounded-2xl border p-4 text-xs ${
+              isDark
+                ? 'border-emerald-500/30 bg-emerald-950/20 text-slate-300'
+                : 'border-emerald-200 bg-emerald-50/70 text-slate-700'
+            }`}
+          >
+            <p className={`font-bold ${isDark ? 'text-emerald-300' : 'text-emerald-800'}`}>
+              Acuan Margin Sehat F&amp;B (&gt; 45%)
+            </p>
+            <p className="mt-1.5 leading-relaxed">
               Untuk bisnis <strong>minuman dan makanan</strong>, margin bersih ideal berada di atas{' '}
               <strong>45%</strong> agar aman menahan kenaikan harga bahan baku, kemasan, *waste*
               produksi, maupun potongan *platform* pesan-antar.
             </p>
-            <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950/80 p-2.5">
-              <span className="text-[11px] text-slate-400">Status harga aktif saat ini:</span>
+            <div className={`mt-3 rounded-xl border p-2.5 ${nestedBox}`}>
+              <span className={`text-[11px] ${mutedText}`}>Status harga aktif saat ini:</span>
               <p
                 className={`mt-0.5 font-bold tabular-nums ${
-                  isHealthyMargin ? 'text-emerald-300' : 'text-amber-300'
+                  isHealthyMargin
+                    ? isDark
+                      ? 'text-emerald-300'
+                      : 'text-emerald-700'
+                    : isDark
+                    ? 'text-amber-300'
+                    : 'text-amber-700'
                 }`}
               >
                 {selectedMarginPct.toFixed(1)}% &bull;{' '}
@@ -580,14 +624,20 @@ export function AppShell({ onNavigate }: AppShellProps) {
         <section className="no-print space-y-6 lg:col-span-5">
           {activeRecipe ? (
             <>
-              {/* FITUR 1: Input Data Produk */}
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/75 p-5 space-y-4">
+              {/* FITUR 1 */}
+              <div className={`rounded-2xl border p-5 space-y-4 ${surfaceCard}`}>
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">
+                    <span
+                      className={`text-[11px] font-bold uppercase tracking-wider ${
+                        isDark ? 'text-emerald-400' : 'text-emerald-700'
+                      }`}
+                    >
                       Fitur 1
                     </span>
-                    <h2 className="text-base font-bold text-white">Input Data Produk &amp; HPP</h2>
+                    <h2 className={`text-base font-bold ${headingText}`}>
+                      Input Data Produk &amp; HPP
+                    </h2>
                   </div>
                   <div className="flex items-center gap-1 text-[11px]">
                     {([100, 500, 1000] as RoundingStep[]).map((step) => (
@@ -597,8 +647,10 @@ export function AppShell({ onNavigate }: AppShellProps) {
                         onClick={() => setRoundingStep(step)}
                         className={`rounded-lg px-2 py-1 font-medium ${
                           roundingStep === step
-                            ? 'bg-emerald-400 text-slate-950 font-bold'
-                            : 'bg-slate-800 text-slate-300'
+                            ? 'bg-emerald-400 font-bold text-slate-950'
+                            : isDark
+                            ? 'bg-slate-800 text-slate-300'
+                            : 'bg-slate-100 text-slate-700'
                         }`}
                       >
                         Rp{step}
@@ -609,19 +661,19 @@ export function AppShell({ onNavigate }: AppShellProps) {
 
                 <div className="grid gap-3 sm:grid-cols-2 text-xs">
                   <div>
-                    <label className="block text-slate-400">Nama Produk / Menu</label>
+                    <label className={`block ${mutedText}`}>Nama Produk / Menu</label>
                     <input
                       type="text"
                       value={activeRecipe.name}
                       onChange={(e) =>
                         updateActiveRecipe((r) => ({ ...r, name: e.target.value }))
                       }
-                      className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-white focus:border-emerald-400 focus:outline-none"
+                      className={`mt-1 w-full rounded-xl border px-3 py-2 focus:outline-none ${fieldInput}`}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-slate-400">Jumlah Produksi / Batch (unit)</label>
+                    <label className={`block ${mutedText}`}>Jumlah Produksi / Batch (unit)</label>
                     <input
                       type="number"
                       min={1}
@@ -634,12 +686,12 @@ export function AppShell({ onNavigate }: AppShellProps) {
                           bepBatchUnits: val,
                         }));
                       }}
-                      className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-white tabular-nums focus:border-emerald-400 focus:outline-none"
+                      className={`mt-1 w-full rounded-xl border px-3 py-2 tabular-nums focus:outline-none ${fieldInput}`}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-slate-400">Mode Target Untung</label>
+                    <label className={`block ${mutedText}`}>Mode Target Untung</label>
                     <select
                       value={activeRecipe.profit_mode}
                       onChange={(e) =>
@@ -648,7 +700,7 @@ export function AppShell({ onNavigate }: AppShellProps) {
                           profit_mode: e.target.value as ProfitMode,
                         }))
                       }
-                      className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-white focus:border-emerald-400 focus:outline-none"
+                      className={`mt-1 w-full rounded-xl border px-3 py-2 focus:outline-none ${fieldInput}`}
                     >
                       <option value="percent">Margin Persen (%)</option>
                       <option value="rupiah">Nominal Rupiah (Rp)</option>
@@ -656,7 +708,7 @@ export function AppShell({ onNavigate }: AppShellProps) {
                   </div>
 
                   <div>
-                    <label className="block text-slate-400">
+                    <label className={`block ${mutedText}`}>
                       Target Untung ({activeRecipe.profit_mode === 'percent' ? '%' : 'Rp / unit'})
                     </label>
                     <input
@@ -669,15 +721,19 @@ export function AppShell({ onNavigate }: AppShellProps) {
                           profit_value: Math.max(0, Number(e.target.value) || 0),
                         }))
                       }
-                      className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-white tabular-nums focus:border-emerald-400 focus:outline-none"
+                      className={`mt-1 w-full rounded-xl border px-3 py-2 tabular-nums focus:outline-none ${fieldInput}`}
                     />
                   </div>
                 </div>
 
-                {/* Sub-bagian: Bahan Baku & Kemasan yang Dibeli */}
-                <div className="border-t border-slate-800 pt-4 space-y-3">
+                {/* Bahan baku & kemasan */}
+                <div
+                  className={`border-t pt-4 space-y-3 ${
+                    isDark ? 'border-slate-800' : 'border-slate-200'
+                  }`}
+                >
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="text-xs font-bold text-white">
+                    <h3 className={`text-xs font-bold ${headingText}`}>
                       Bahan Baku &amp; Kemasan yang Dibeli
                     </h3>
                     <select
@@ -688,7 +744,7 @@ export function AppShell({ onNavigate }: AppShellProps) {
                           e.target.value = '';
                         }
                       }}
-                      className="rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-xs text-slate-200 focus:border-emerald-400 focus:outline-none"
+                      className={`rounded-lg border px-2.5 py-1.5 text-xs focus:outline-none ${fieldInput}`}
                     >
                       <option value="">+ Pilih dari daftar bahan...</option>
                       {ingredients.map((ing) => (
@@ -699,7 +755,6 @@ export function AppShell({ onNavigate }: AppShellProps) {
                     </select>
                   </div>
 
-                  {/* Daftar bahan terpakai di produk ini */}
                   <div className="space-y-2">
                     {activeCalc.lineItems.map(({ ingredient, qty, costPerPortion }) => {
                       const unitCostForOneProduction =
@@ -710,11 +765,13 @@ export function AppShell({ onNavigate }: AppShellProps) {
                       return (
                         <div
                           key={ingredient.id}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-950/80 p-2.5 text-xs"
+                          className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border p-2.5 text-xs ${nestedBox}`}
                         >
                           <div className="min-w-0 flex-1">
-                            <p className="truncate font-semibold text-white">{ingredient.name}</p>
-                            <p className="text-[11px] text-slate-400">
+                            <p className={`truncate font-semibold ${headingText}`}>
+                              {ingredient.name}
+                            </p>
+                            <p className={`text-[11px] ${mutedText}`}>
                               {ingredient.category === 'kemasan' ? 'Kemasan' : 'Bahan'} &bull; Beli:{' '}
                               {formatRupiah(ingredient.buy_price)} / {ingredient.buy_qty}{' '}
                               {ingredient.unit}
@@ -733,16 +790,20 @@ export function AppShell({ onNavigate }: AppShellProps) {
                                   Number(e.target.value) || 0
                                 )
                               }
-                              className="w-20 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-right text-white tabular-nums"
+                              className={`w-20 rounded-lg border px-2 py-1 text-right tabular-nums ${fieldInput}`}
                             />
-                            <span className="text-[11px] text-slate-400">{ingredient.unit}</span>
-                            <span className="w-24 text-right font-semibold text-emerald-300 tabular-nums">
+                            <span className={`text-[11px] ${mutedText}`}>{ingredient.unit}</span>
+                            <span
+                              className={`w-24 text-right font-semibold tabular-nums ${
+                                isDark ? 'text-emerald-300' : 'text-emerald-700'
+                              }`}
+                            >
                               {formatRupiah(unitCostForOneProduction)}
                             </span>
                             <button
                               type="button"
                               onClick={() => handleRemoveRecipeItem(ingredient.id)}
-                              className="rounded px-1.5 py-1 text-xs text-slate-400 hover:bg-rose-500/15 hover:text-rose-300"
+                              className="rounded px-1.5 py-1 text-xs text-slate-400 hover:bg-rose-500/15 hover:text-rose-500"
                             >
                               ✕
                             </button>
@@ -752,21 +813,22 @@ export function AppShell({ onNavigate }: AppShellProps) {
                     })}
                   </div>
 
-                  {/* Form tambah bahan/kemasan baru */}
-                  <div className="rounded-xl border border-slate-800/90 bg-slate-950/60 p-3 space-y-2.5 text-xs">
-                    <p className="font-semibold text-slate-300">Tambah Bahan / Kemasan Baru</p>
+                  <div className={`rounded-xl border p-3 space-y-2.5 text-xs ${nestedBox}`}>
+                    <p className={`font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                      Tambah Bahan / Kemasan Baru
+                    </p>
                     <div className="grid gap-2 sm:grid-cols-3">
                       <input
                         type="text"
                         value={newIngName}
                         onChange={(e) => setNewIngName(e.target.value)}
                         placeholder="Nama bahan / cup"
-                        className="rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-white placeholder-slate-500"
+                        className={`rounded-lg border px-2.5 py-1.5 ${fieldInput}`}
                       />
                       <select
                         value={newIngCategory}
                         onChange={(e) => setNewIngCategory(e.target.value as Category)}
-                        className="rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-white"
+                        className={`rounded-lg border px-2.5 py-1.5 ${fieldInput}`}
                       >
                         <option value="bahan">Bahan</option>
                         <option value="kemasan">Kemasan</option>
@@ -774,7 +836,7 @@ export function AppShell({ onNavigate }: AppShellProps) {
                       <select
                         value={newIngUnit}
                         onChange={(e) => setNewIngUnit(e.target.value as Unit)}
-                        className="rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-white"
+                        className={`rounded-lg border px-2.5 py-1.5 ${fieldInput}`}
                       >
                         <option value="gr">gr</option>
                         <option value="ml">ml</option>
@@ -784,27 +846,33 @@ export function AppShell({ onNavigate }: AppShellProps) {
 
                     <div className="grid gap-2 sm:grid-cols-3">
                       <div>
-                        <span className="text-[11px] text-slate-400">Harga beli (Rp)</span>
+                        <span className={`text-[11px] ${mutedText}`}>Harga beli (Rp)</span>
                         <input
                           type="number"
                           min={0}
                           value={newIngBuyPrice}
-                          onChange={(e) => setNewIngBuyPrice(Math.max(0, Number(e.target.value) || 0))}
-                          className="mt-0.5 w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-white tabular-nums"
+                          onChange={(e) =>
+                            setNewIngBuyPrice(Math.max(0, Number(e.target.value) || 0))
+                          }
+                          className={`mt-0.5 w-full rounded-lg border px-2.5 py-1.5 tabular-nums ${fieldInput}`}
                         />
                       </div>
                       <div>
-                        <span className="text-[11px] text-slate-400">Isi kemasan ({newIngUnit})</span>
+                        <span className={`text-[11px] ${mutedText}`}>
+                          Isi kemasan ({newIngUnit})
+                        </span>
                         <input
                           type="number"
                           min={1}
                           value={newIngBuyQty}
-                          onChange={(e) => setNewIngBuyQty(Math.max(1, Number(e.target.value) || 1))}
-                          className="mt-0.5 w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-white tabular-nums"
+                          onChange={(e) =>
+                            setNewIngBuyQty(Math.max(1, Number(e.target.value) || 1))
+                          }
+                          className={`mt-0.5 w-full rounded-lg border px-2.5 py-1.5 tabular-nums ${fieldInput}`}
                         />
                       </div>
                       <div>
-                        <span className="text-[11px] text-slate-400">
+                        <span className={`text-[11px] ${mutedText}`}>
                           Kebutuhan 1 produksi ({newIngUnit})
                         </span>
                         <input
@@ -812,16 +880,18 @@ export function AppShell({ onNavigate }: AppShellProps) {
                           min={0}
                           step="any"
                           value={newIngUseQty}
-                          onChange={(e) => setNewIngUseQty(Math.max(0, Number(e.target.value) || 0))}
-                          className="mt-0.5 w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-white tabular-nums"
+                          onChange={(e) =>
+                            setNewIngUseQty(Math.max(0, Number(e.target.value) || 0))
+                          }
+                          className={`mt-0.5 w-full rounded-lg border px-2.5 py-1.5 tabular-nums ${fieldInput}`}
                         />
                       </div>
                     </div>
 
                     <div className="flex items-center justify-between pt-1">
-                      <span className="text-[11px] text-slate-400 tabular-nums">
+                      <span className={`text-[11px] tabular-nums ${mutedText}`}>
                         Harga satuan 1 produksi:{' '}
-                        <strong className="text-emerald-300">
+                        <strong className={isDark ? 'text-emerald-300' : 'text-emerald-700'}>
                           {formatRupiah(
                             newIngBuyQty > 0
                               ? (newIngBuyPrice / newIngBuyQty) * newIngUseQty
@@ -840,19 +910,25 @@ export function AppShell({ onNavigate }: AppShellProps) {
                   </div>
                 </div>
 
-                {/* Sub-bagian: Biaya Operasional (Tenaga Kerja & Overhead) */}
-                <div className="border-t border-slate-800 pt-4 space-y-3 text-xs">
-                  <h3 className="font-bold text-white">Biaya Operasional per Unit</h3>
+                {/* Biaya operasional */}
+                <div
+                  className={`border-t pt-4 space-y-3 text-xs ${
+                    isDark ? 'border-slate-800' : 'border-slate-200'
+                  }`}
+                >
+                  <h3 className={`font-bold ${headingText}`}>Biaya Operasional per Unit</h3>
 
-                  <div className="rounded-xl border border-slate-800 bg-slate-950/75 p-3 space-y-2">
-                    <p className="font-semibold text-slate-200">Biaya Tenaga Kerja per Unit (Rp)</p>
-                    <p className="text-[11px] text-slate-400">
+                  <div className={`rounded-xl border p-3 space-y-2 ${nestedBox}`}>
+                    <p className={`font-semibold ${headingText}`}>
+                      Biaya Tenaga Kerja per Unit (Rp)
+                    </p>
+                    <p className={`text-[11px] ${mutedText}`}>
                       Rumus: Gaji per hari ÷ jumlah produk per hari (contoh: Rp100.000 ÷ 500 =
                       Rp200)
                     </p>
                     <div className="grid grid-cols-3 gap-2">
                       <div>
-                        <span className="text-[11px] text-slate-400">Gaji / hari (Rp)</span>
+                        <span className={`text-[11px] ${mutedText}`}>Gaji / hari (Rp)</span>
                         <input
                           type="number"
                           min={0}
@@ -863,11 +939,11 @@ export function AppShell({ onNavigate }: AppShellProps) {
                               dailyWage: Math.max(0, Number(e.target.value) || 0),
                             }))
                           }
-                          className="mt-0.5 w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-white tabular-nums"
+                          className={`mt-0.5 w-full rounded-lg border px-2.5 py-1.5 tabular-nums ${fieldInput}`}
                         />
                       </div>
                       <div>
-                        <span className="text-[11px] text-slate-400">Produk / hari</span>
+                        <span className={`text-[11px] ${mutedText}`}>Produk / hari</span>
                         <input
                           type="number"
                           min={1}
@@ -878,27 +954,33 @@ export function AppShell({ onNavigate }: AppShellProps) {
                               dailyOutput: Math.max(1, Number(e.target.value) || 1),
                             }))
                           }
-                          className="mt-0.5 w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-white tabular-nums"
+                          className={`mt-0.5 w-full rounded-lg border px-2.5 py-1.5 tabular-nums ${fieldInput}`}
                         />
                       </div>
                       <div>
-                        <span className="text-[11px] text-slate-400">Tenaga kerja / unit</span>
-                        <div className="mt-0.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1.5 font-bold text-emerald-300 tabular-nums">
+                        <span className={`text-[11px] ${mutedText}`}>Tenaga kerja / unit</span>
+                        <div
+                          className={`mt-0.5 rounded-lg border px-2.5 py-1.5 font-bold tabular-nums ${
+                            isDark
+                              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                              : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                          }`}
+                        >
                           {formatRupiah(laborCostPerUnit)}
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-slate-800 bg-slate-950/75 p-3 space-y-2">
-                    <p className="font-semibold text-slate-200">Biaya Overhead per Unit (Rp)</p>
-                    <p className="text-[11px] text-slate-400">
+                  <div className={`rounded-xl border p-3 space-y-2 ${nestedBox}`}>
+                    <p className={`font-semibold ${headingText}`}>Biaya Overhead per Unit (Rp)</p>
+                    <p className={`text-[11px] ${mutedText}`}>
                       Rumus: Total biaya bulanan (listrik, sewa, dll) ÷ jumlah produksi (contoh:
                       Rp2.000.000 ÷ 10.000 = Rp200)
                     </p>
                     <div className="grid grid-cols-3 gap-2">
                       <div>
-                        <span className="text-[11px] text-slate-400">Biaya / bulan (Rp)</span>
+                        <span className={`text-[11px] ${mutedText}`}>Biaya / bulan (Rp)</span>
                         <input
                           type="number"
                           min={0}
@@ -909,11 +991,11 @@ export function AppShell({ onNavigate }: AppShellProps) {
                               monthlyOverhead: Math.max(0, Number(e.target.value) || 0),
                             }))
                           }
-                          className="mt-0.5 w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-white tabular-nums"
+                          className={`mt-0.5 w-full rounded-lg border px-2.5 py-1.5 tabular-nums ${fieldInput}`}
                         />
                       </div>
                       <div>
-                        <span className="text-[11px] text-slate-400">Produksi / bulan</span>
+                        <span className={`text-[11px] ${mutedText}`}>Produksi / bulan</span>
                         <input
                           type="number"
                           min={1}
@@ -924,12 +1006,18 @@ export function AppShell({ onNavigate }: AppShellProps) {
                               monthlyOutput: Math.max(1, Number(e.target.value) || 1),
                             }))
                           }
-                          className="mt-0.5 w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-white tabular-nums"
+                          className={`mt-0.5 w-full rounded-lg border px-2.5 py-1.5 tabular-nums ${fieldInput}`}
                         />
                       </div>
                       <div>
-                        <span className="text-[11px] text-slate-400">Overhead / unit</span>
-                        <div className="mt-0.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1.5 font-bold text-cyan-300 tabular-nums">
+                        <span className={`text-[11px] ${mutedText}`}>Overhead / unit</span>
+                        <div
+                          className={`mt-0.5 rounded-lg border px-2.5 py-1.5 font-bold tabular-nums ${
+                            isDark
+                              ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300'
+                              : 'border-cyan-200 bg-cyan-50 text-cyan-800'
+                          }`}
+                        >
                           {formatRupiah(overheadCostPerUnit)}
                         </div>
                       </div>
@@ -938,46 +1026,58 @@ export function AppShell({ onNavigate }: AppShellProps) {
                 </div>
 
                 {/* Hasil Perhitungan Fitur 1 */}
-                <div className="grid grid-cols-2 gap-2.5 rounded-2xl border border-emerald-500/30 bg-slate-950/90 p-3.5 text-xs">
+                <div className={`grid grid-cols-2 gap-2.5 rounded-2xl border p-3.5 text-xs ${nestedBox}`}>
                   <div>
-                    <span className="text-[11px] text-slate-400">Total Pembelian Bahan</span>
-                    <p className="mt-0.5 font-bold text-white tabular-nums">
+                    <span className={`text-[11px] ${mutedText}`}>Total Pembelian Bahan</span>
+                    <p className={`mt-0.5 font-bold tabular-nums ${headingText}`}>
                       {formatRupiah(productionSummary.totalMaterialPurchase)}
                     </p>
                   </div>
                   <div>
-                    <span className="text-[11px] text-slate-400">
+                    <span className={`text-[11px] ${mutedText}`}>
                       Total Biaya Lain (TK + Overhead)
                     </span>
-                    <p className="mt-0.5 font-bold text-white tabular-nums">
+                    <p className={`mt-0.5 font-bold tabular-nums ${headingText}`}>
                       {formatRupiah(productionSummary.totalOtherCost)}
                     </p>
                   </div>
                   <div>
-                    <span className="text-[11px] text-slate-400">Biaya Produksi Total</span>
-                    <p className="mt-0.5 font-bold text-cyan-300 tabular-nums">
+                    <span className={`text-[11px] ${mutedText}`}>Biaya Produksi Total</span>
+                    <p
+                      className={`mt-0.5 font-bold tabular-nums ${
+                        isDark ? 'text-cyan-300' : 'text-cyan-700'
+                      }`}
+                    >
                       {formatRupiah(productionSummary.totalProductionCost)}
                     </p>
                   </div>
                   <div>
-                    <span className="text-[11px] text-slate-400">HPP per Produk</span>
-                    <p className="mt-0.5 text-sm font-extrabold text-emerald-300 tabular-nums">
+                    <span className={`text-[11px] ${mutedText}`}>HPP per Produk</span>
+                    <p
+                      className={`mt-0.5 text-sm font-extrabold tabular-nums ${
+                        isDark ? 'text-emerald-300' : 'text-emerald-700'
+                      }`}
+                    >
                       {formatRupiah(productionSummary.hppPerUnit)}
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* FITUR 2: Saran Harga Jual (Bagus, Sangat Bagus, Profitable) */}
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/75 p-5 space-y-3.5">
+              {/* FITUR 2 */}
+              <div className={`rounded-2xl border p-5 space-y-3.5 ${surfaceCard}`}>
                 <div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">
+                  <span
+                    className={`text-[11px] font-bold uppercase tracking-wider ${
+                      isDark ? 'text-emerald-400' : 'text-emerald-700'
+                    }`}
+                  >
                     Fitur 2 &bull; Standar Platform 2026
                   </span>
-                  <h2 className="text-base font-bold text-white">
+                  <h2 className={`text-base font-bold ${headingText}`}>
                     Saran Harga Jual (Bagus, Sangat Bagus, Profitable)
                   </h2>
-                  <p className="text-xs text-slate-400">
+                  <p className={`text-xs ${mutedText}`}>
                     Bandingkan channel penjualan dengan potongan platform 2026 (dapat disesuaikan).
                   </p>
                 </div>
@@ -990,8 +1090,10 @@ export function AppShell({ onNavigate }: AppShellProps) {
                         key={item.channel.id}
                         className={`rounded-2xl border p-3.5 transition ${
                           isChannelSelected
-                            ? 'border-emerald-400/60 bg-slate-950'
-                            : 'border-slate-800 bg-slate-950/70'
+                            ? isDark
+                              ? 'border-emerald-400/60 bg-slate-950'
+                              : 'border-emerald-400 bg-emerald-50/35'
+                            : nestedBox
                         }`}
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1003,17 +1105,23 @@ export function AppShell({ onNavigate }: AppShellProps) {
                                 selectedChannelId: item.channel.id,
                               }))
                             }
-                            className="text-left font-bold text-white hover:text-emerald-300"
+                            className={`text-left font-bold hover:text-emerald-500 ${headingText}`}
                           >
                             {item.channel.name}{' '}
                             {isChannelSelected && (
-                              <span className="ml-1 rounded bg-emerald-400/20 px-1.5 py-0.5 text-[10px] text-emerald-300">
+                              <span
+                                className={`ml-1 rounded px-1.5 py-0.5 text-[10px] ${
+                                  isDark
+                                    ? 'bg-emerald-400/20 text-emerald-300'
+                                    : 'bg-emerald-100 text-emerald-800'
+                                }`}
+                              >
                                 Aktif
                               </span>
                             )}
                           </button>
 
-                          <label className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                          <label className={`flex items-center gap-1.5 text-[11px] ${mutedText}`}>
                             <span>Fee %</span>
                             <input
                               type="number"
@@ -1027,7 +1135,7 @@ export function AppShell({ onNavigate }: AppShellProps) {
                                   Number(e.target.value) || 0
                                 )
                               }
-                              className="w-16 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-right text-white tabular-nums"
+                              className={`w-16 rounded-lg border px-2 py-1 text-right tabular-nums ${fieldInput}`}
                             />
                           </label>
                         </div>
@@ -1042,12 +1150,18 @@ export function AppShell({ onNavigate }: AppShellProps) {
                                 pricePreset: 'bagus',
                               }))
                             }
-                            className="rounded-xl border border-slate-800 bg-slate-900/90 p-2 text-left hover:border-emerald-400/50"
+                            className={`rounded-xl border p-2 text-left hover:border-emerald-400 ${
+                              isDark ? 'border-slate-800 bg-slate-900/90' : 'border-slate-200 bg-white'
+                            }`}
                           >
-                            <span className="text-[10px] font-semibold text-emerald-300">
+                            <span
+                              className={`text-[10px] font-semibold ${
+                                isDark ? 'text-emerald-300' : 'text-emerald-700'
+                              }`}
+                            >
                               Bagus (~45%)
                             </span>
-                            <p className="mt-0.5 font-bold text-white tabular-nums">
+                            <p className={`mt-0.5 font-bold tabular-nums ${headingText}`}>
                               {formatRupiah(item.bagus.price)}
                             </p>
                           </button>
@@ -1061,12 +1175,18 @@ export function AppShell({ onNavigate }: AppShellProps) {
                                 pricePreset: 'sangat_bagus',
                               }))
                             }
-                            className="rounded-xl border border-slate-800 bg-slate-900/90 p-2 text-left hover:border-cyan-400/50"
+                            className={`rounded-xl border p-2 text-left hover:border-cyan-400 ${
+                              isDark ? 'border-slate-800 bg-slate-900/90' : 'border-slate-200 bg-white'
+                            }`}
                           >
-                            <span className="text-[10px] font-semibold text-cyan-300">
+                            <span
+                              className={`text-[10px] font-semibold ${
+                                isDark ? 'text-cyan-300' : 'text-cyan-700'
+                              }`}
+                            >
                               Sangat Bagus (~52%)
                             </span>
-                            <p className="mt-0.5 font-bold text-white tabular-nums">
+                            <p className={`mt-0.5 font-bold tabular-nums ${headingText}`}>
                               {formatRupiah(item.sangatBagus.price)}
                             </p>
                           </button>
@@ -1080,12 +1200,18 @@ export function AppShell({ onNavigate }: AppShellProps) {
                                 pricePreset: 'profitable',
                               }))
                             }
-                            className="rounded-xl border border-slate-800 bg-slate-900/90 p-2 text-left hover:border-amber-400/50"
+                            className={`rounded-xl border p-2 text-left hover:border-amber-400 ${
+                              isDark ? 'border-slate-800 bg-slate-900/90' : 'border-slate-200 bg-white'
+                            }`}
                           >
-                            <span className="text-[10px] font-semibold text-amber-300">
+                            <span
+                              className={`text-[10px] font-semibold ${
+                                isDark ? 'text-amber-300' : 'text-amber-700'
+                              }`}
+                            >
                               Profitable (~60%)
                             </span>
-                            <p className="mt-0.5 font-bold text-white tabular-nums">
+                            <p className={`mt-0.5 font-bold tabular-nums ${headingText}`}>
                               {formatRupiah(item.profitable.price)}
                             </p>
                           </button>
@@ -1096,13 +1222,17 @@ export function AppShell({ onNavigate }: AppShellProps) {
                 </div>
               </div>
 
-              {/* FITUR 3: Simulasi Produk Terjual & Profit */}
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/75 p-5 space-y-4">
+              {/* FITUR 3 */}
+              <div className={`rounded-2xl border p-5 space-y-4 ${surfaceCard}`}>
                 <div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">
+                  <span
+                    className={`text-[11px] font-bold uppercase tracking-wider ${
+                      isDark ? 'text-emerald-400' : 'text-emerald-700'
+                    }`}
+                  >
                     Fitur 3
                   </span>
-                  <h2 className="text-base font-bold text-white">
+                  <h2 className={`text-base font-bold ${headingText}`}>
                     Simulasi Produk Terjual &amp; Profit
                   </h2>
                 </div>
@@ -1132,7 +1262,9 @@ export function AppShell({ onNavigate }: AppShellProps) {
                       className={`rounded-xl py-2 font-semibold transition ${
                         activeSim.pricePreset === key
                           ? 'bg-emerald-400 text-slate-950'
-                          : 'border border-slate-800 bg-slate-950 text-slate-300 hover:border-slate-600'
+                          : isDark
+                          ? 'border border-slate-800 bg-slate-950 text-slate-300 hover:border-slate-600'
+                          : 'border border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300'
                       }`}
                     >
                       {label}
@@ -1142,7 +1274,7 @@ export function AppShell({ onNavigate }: AppShellProps) {
 
                 <div className="grid gap-3 sm:grid-cols-2 text-xs">
                   <div>
-                    <label className="block text-slate-400">Harga Jual per Unit (Rp)</label>
+                    <label className={`block ${mutedText}`}>Harga Jual per Unit (Rp)</label>
                     <input
                       type="number"
                       min={0}
@@ -1159,12 +1291,12 @@ export function AppShell({ onNavigate }: AppShellProps) {
                           customUnitPrice: Math.max(0, Number(e.target.value) || 0),
                         }))
                       }
-                      className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-white tabular-nums disabled:opacity-75 focus:border-emerald-400 focus:outline-none"
+                      className={`mt-1 w-full rounded-xl border px-3 py-2 tabular-nums disabled:opacity-75 focus:outline-none ${fieldInput}`}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-slate-400">Jumlah Produk Terjual (unit)</label>
+                    <label className={`block ${mutedText}`}>Jumlah Produk Terjual (unit)</label>
                     <input
                       type="number"
                       min={0}
@@ -1175,35 +1307,47 @@ export function AppShell({ onNavigate }: AppShellProps) {
                           soldUnits: Math.max(0, Number(e.target.value) || 0),
                         }))
                       }
-                      className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-white tabular-nums focus:border-emerald-400 focus:outline-none"
+                      className={`mt-1 w-full rounded-xl border px-3 py-2 tabular-nums focus:outline-none ${fieldInput}`}
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2.5 rounded-2xl border border-slate-800 bg-slate-950/90 p-3.5 text-xs">
+                <div className={`grid grid-cols-3 gap-2.5 rounded-2xl border p-3.5 text-xs ${nestedBox}`}>
                   <div>
-                    <span className="text-[11px] text-slate-400">HPP per Produk</span>
-                    <p className="mt-0.5 font-bold text-white tabular-nums">
+                    <span className={`text-[11px] ${mutedText}`}>HPP per Produk</span>
+                    <p className={`mt-0.5 font-bold tabular-nums ${headingText}`}>
                       {formatRupiah(productionSummary.hppPerUnit)}
                     </p>
                   </div>
                   <div>
-                    <span className="text-[11px] text-slate-400">Profit per Produk</span>
+                    <span className={`text-[11px] ${mutedText}`}>Profit per Produk</span>
                     <p
                       className={`mt-0.5 font-bold tabular-nums ${
-                        profitPerUnit >= 0 ? 'text-emerald-300' : 'text-rose-400'
+                        profitPerUnit >= 0
+                          ? isDark
+                            ? 'text-emerald-300'
+                            : 'text-emerald-700'
+                          : isDark
+                          ? 'text-rose-400'
+                          : 'text-rose-600'
                       }`}
                     >
                       {formatRupiah(profitPerUnit)}
                     </p>
                   </div>
                   <div>
-                    <span className="text-[11px] text-slate-400">
+                    <span className={`text-[11px] ${mutedText}`}>
                       Total Profit ({soldUnits} unit)
                     </span>
                     <p
                       className={`mt-0.5 text-sm font-extrabold tabular-nums ${
-                        totalProfitFromSold >= 0 ? 'text-cyan-300' : 'text-rose-400'
+                        totalProfitFromSold >= 0
+                          ? isDark
+                            ? 'text-cyan-300'
+                            : 'text-cyan-700'
+                          : isDark
+                          ? 'text-rose-400'
+                          : 'text-rose-600'
                       }`}
                     >
                       {formatRupiah(totalProfitFromSold)}
@@ -1212,21 +1356,27 @@ export function AppShell({ onNavigate }: AppShellProps) {
                 </div>
               </div>
 
-              {/* FITUR 4: Simulasi BEP / Balik Modal */}
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/75 p-5 space-y-4">
+              {/* FITUR 4 */}
+              <div className={`rounded-2xl border p-5 space-y-4 ${surfaceCard}`}>
                 <div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">
+                  <span
+                    className={`text-[11px] font-bold uppercase tracking-wider ${
+                      isDark ? 'text-emerald-400' : 'text-emerald-700'
+                    }`}
+                  >
                     Fitur 4
                   </span>
-                  <h2 className="text-base font-bold text-white">Simulasi BEP / Balik Modal</h2>
-                  <p className="text-xs text-slate-400">
+                  <h2 className={`text-base font-bold ${headingText}`}>
+                    Simulasi BEP / Balik Modal
+                  </h2>
+                  <p className={`text-xs ${mutedText}`}>
                     Hitung berapa unit terjual agar seluruh biaya produksi tertutup.
                   </p>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2 text-xs">
                   <div>
-                    <label className="block text-slate-400">Total Produksi Disiapkan (unit)</label>
+                    <label className={`block ${mutedText}`}>Total Produksi Disiapkan (unit)</label>
                     <input
                       type="number"
                       min={1}
@@ -1237,63 +1387,91 @@ export function AppShell({ onNavigate }: AppShellProps) {
                           bepBatchUnits: Math.max(1, Number(e.target.value) || 1),
                         }))
                       }
-                      className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-white tabular-nums focus:border-emerald-400 focus:outline-none"
+                      className={`mt-1 w-full rounded-xl border px-3 py-2 tabular-nums focus:outline-none ${fieldInput}`}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-slate-400">Harga Jual Dipilih</label>
-                    <div className="mt-1 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 font-bold text-white tabular-nums">
+                    <label className={`block ${mutedText}`}>Harga Jual Dipilih</label>
+                    <div
+                      className={`mt-1 rounded-xl border px-3 py-2 font-bold tabular-nums ${nestedBox} ${headingText}`}
+                    >
                       {formatRupiah(selectedUnitPrice)} / unit
                     </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2.5 rounded-2xl border border-slate-800 bg-slate-950/90 p-3.5 text-xs">
+                <div className={`grid grid-cols-2 gap-2.5 rounded-2xl border p-3.5 text-xs ${nestedBox}`}>
                   <div>
-                    <span className="text-[11px] text-slate-400">Total Biaya Produksi</span>
-                    <p className="mt-0.5 font-bold text-white tabular-nums">
+                    <span className={`text-[11px] ${mutedText}`}>Total Biaya Produksi</span>
+                    <p className={`mt-0.5 font-bold tabular-nums ${headingText}`}>
                       {formatRupiah(bepSim.totalCostForBepBatch)}
                     </p>
                   </div>
                   <div>
-                    <span className="text-[11px] text-slate-400">BEP (Unit Terjual)</span>
-                    <p className="mt-0.5 font-bold text-emerald-300 tabular-nums">
+                    <span className={`text-[11px] ${mutedText}`}>BEP (Unit Terjual)</span>
+                    <p
+                      className={`mt-0.5 font-bold tabular-nums ${
+                        isDark ? 'text-emerald-300' : 'text-emerald-700'
+                      }`}
+                    >
                       {bepSim.bepUnits !== null ? `${bepSim.bepUnits} unit` : 'Belum tercapai'}
                     </p>
                   </div>
                   <div>
-                    <span className="text-[11px] text-slate-400">BEP (Omzet)</span>
-                    <p className="mt-0.5 font-bold text-cyan-300 tabular-nums">
+                    <span className={`text-[11px] ${mutedText}`}>BEP (Omzet)</span>
+                    <p
+                      className={`mt-0.5 font-bold tabular-nums ${
+                        isDark ? 'text-cyan-300' : 'text-cyan-700'
+                      }`}
+                    >
                       {bepSim.bepRevenue !== null ? formatRupiah(bepSim.bepRevenue) : '-'}
                     </p>
                   </div>
                   <div>
-                    <span className="text-[11px] text-slate-400">
+                    <span className={`text-[11px] ${mutedText}`}>
                       Dari {bepSim.bepBatch} Unit Produksi
                     </span>
-                    <p className="mt-0.5 font-bold text-white tabular-nums">
+                    <p className={`mt-0.5 font-bold tabular-nums ${headingText}`}>
                       {bepSim.bepPct !== null
                         ? `BEP di ${bepSim.bepUnits} unit (${bepSim.bepPct.toFixed(1)}%)`
                         : '-'}
                     </p>
                   </div>
-                  <div className="col-span-2 flex items-center justify-between border-t border-slate-800 pt-2">
-                    <span className="text-[11px] text-slate-400">Sisa Unit Murni Profit</span>
-                    <span className="font-bold text-emerald-300 tabular-nums">
+                  <div
+                    className={`col-span-2 flex items-center justify-between border-t pt-2 ${
+                      isDark ? 'border-slate-800' : 'border-slate-200'
+                    }`}
+                  >
+                    <span className={`text-[11px] ${mutedText}`}>Sisa Unit Murni Profit</span>
+                    <span
+                      className={`font-bold tabular-nums ${
+                        isDark ? 'text-emerald-300' : 'text-emerald-700'
+                      }`}
+                    >
                       {bepSim.surplusUnits} unit ({formatRupiah(bepSim.surplusProfit)})
                     </span>
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-cyan-500/25 bg-cyan-950/20 p-3 text-xs leading-relaxed text-slate-200">
+                <div
+                  className={`rounded-xl border p-3 text-xs leading-relaxed ${
+                    isDark
+                      ? 'border-cyan-500/25 bg-cyan-950/20 text-slate-200'
+                      : 'border-cyan-200 bg-cyan-50/70 text-slate-700'
+                  }`}
+                >
                   {bepSim.isReachable && bepSim.bepUnits !== null ? (
                     <>
                       Contoh simulasi: Dengan <strong>{bepSim.bepBatch} unit</strong> terjual pada
                       harga <strong>{formatRupiah(selectedUnitPrice)}</strong>, kamu balik modal
                       setelah terjual <strong>{bepSim.bepUnits} unit</strong>, dan sisa{' '}
                       <strong>{bepSim.surplusUnits} unit</strong> menghasilkan profit bersih{' '}
-                      <strong className="text-emerald-300 tabular-nums">
+                      <strong
+                        className={`tabular-nums ${
+                          isDark ? 'text-emerald-300' : 'text-emerald-700'
+                        }`}
+                      >
                         {formatRupiah(bepSim.surplusProfit)}
                       </strong>
                       .
@@ -1312,16 +1490,28 @@ export function AppShell({ onNavigate }: AppShellProps) {
 
         {/* Kolom Kanan: Preview Ringkasan & Ekspor PDF */}
         <section className="lg:col-span-4">
-          <div className="print-card sticky top-20 rounded-2xl border border-slate-800 bg-slate-900/85 p-5 shadow-xl space-y-4">
-            <div className="flex items-start justify-between gap-2 border-b border-slate-800 pb-3">
+          <div
+            className={`print-card sticky top-20 rounded-2xl border p-5 space-y-4 ${
+              isDark ? 'border-slate-800 bg-slate-900/85 shadow-xl' : 'border-slate-200 bg-white shadow-sm'
+            }`}
+          >
+            <div
+              className={`flex items-start justify-between gap-2 border-b pb-3 ${
+                isDark ? 'border-slate-800' : 'border-slate-200'
+              }`}
+            >
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">
+                <p
+                  className={`text-[11px] font-bold uppercase tracking-wider ${
+                    isDark ? 'text-emerald-400' : 'text-emerald-700'
+                  }`}
+                >
                   Preview Laporan HPP
                 </p>
-                <h2 className="text-lg font-bold text-white print:text-slate-900">
+                <h2 className={`text-lg font-bold ${headingText}`}>
                   {activeRecipe?.name ?? 'Produk'}
                 </h2>
-                <p className="text-xs text-slate-400 print:text-slate-600">
+                <p className={`text-xs ${mutedText}`}>
                   Channel: {activeChannelSuggestion?.channel.name ?? 'Jual Langsung'} (Fee{' '}
                   {selectedFeePercent}%)
                 </p>
@@ -1337,35 +1527,41 @@ export function AppShell({ onNavigate }: AppShellProps) {
 
             <div className="space-y-2 text-xs">
               <div className="flex justify-between">
-                <span className="text-slate-400 print:text-slate-600">Total Pembelian Bahan</span>
+                <span className={mutedText}>Total Pembelian Bahan</span>
                 <span className="font-semibold tabular-nums">
                   {formatRupiah(productionSummary.totalMaterialPurchase)}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400 print:text-slate-600">
-                  Total Biaya Lain (TK + Overhead)
-                </span>
+                <span className={mutedText}>Total Biaya Lain (TK + Overhead)</span>
                 <span className="font-semibold tabular-nums">
                   {formatRupiah(productionSummary.totalOtherCost)}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400 print:text-slate-600">Biaya Produksi Total</span>
+                <span className={mutedText}>Biaya Produksi Total</span>
                 <span className="font-semibold tabular-nums">
                   {formatRupiah(productionSummary.totalProductionCost)}
                 </span>
               </div>
-              <div className="flex justify-between border-t border-slate-800 pt-2 text-sm">
+              <div
+                className={`flex justify-between border-t pt-2 text-sm ${
+                  isDark ? 'border-slate-800' : 'border-slate-200'
+                }`}
+              >
                 <span className="font-bold">HPP per Produk</span>
-                <span className="font-extrabold text-emerald-300 print:text-emerald-700 tabular-nums">
+                <span
+                  className={`font-extrabold tabular-nums ${
+                    isDark ? 'text-emerald-300' : 'text-emerald-700'
+                  }`}
+                >
                   {formatRupiah(productionSummary.hppPerUnit)}
                 </span>
               </div>
             </div>
 
-            <div className="rounded-xl border border-slate-800 bg-slate-950/75 p-3 print:border-slate-300 print:bg-slate-50 space-y-1.5 text-xs">
-              <p className="font-bold text-slate-200 print:text-slate-900">
+            <div className={`rounded-xl border p-3 print:border-slate-300 print:bg-slate-50 space-y-1.5 text-xs ${nestedBox}`}>
+              <p className={`font-bold ${headingText}`}>
                 Saran Harga ({activeChannelSuggestion?.channel.name})
               </p>
               <div className="flex justify-between tabular-nums">
@@ -1388,8 +1584,8 @@ export function AppShell({ onNavigate }: AppShellProps) {
               </div>
             </div>
 
-            <div className="rounded-xl border border-slate-800 bg-slate-950/75 p-3 print:border-slate-300 print:bg-slate-50 space-y-1.5 text-xs">
-              <p className="font-bold text-slate-200 print:text-slate-900">
+            <div className={`rounded-xl border p-3 print:border-slate-300 print:bg-slate-50 space-y-1.5 text-xs ${nestedBox}`}>
+              <p className={`font-bold ${headingText}`}>
                 Simulasi Terjual ({soldUnits} unit) &amp; BEP
               </p>
               <div className="flex justify-between tabular-nums">
@@ -1400,7 +1596,11 @@ export function AppShell({ onNavigate }: AppShellProps) {
               </div>
               <div className="flex justify-between tabular-nums">
                 <span>Omzet / Total Profit</span>
-                <span className="font-bold text-cyan-300 print:text-cyan-700">
+                <span
+                  className={`font-bold ${
+                    isDark ? 'text-cyan-300' : 'text-cyan-700'
+                  }`}
+                >
                   {formatRupiah(totalRevenueFromSold)} / {formatRupiah(totalProfitFromSold)}
                 </span>
               </div>
@@ -1414,7 +1614,7 @@ export function AppShell({ onNavigate }: AppShellProps) {
               </div>
             </div>
 
-            <p className="text-[11px] text-slate-400 print:text-slate-600">
+            <p className={`text-[11px] ${mutedText}`}>
               Catatan F&amp;B: Margin minuman &amp; makanan disarankan &gt; 45%. Saat klik Ekspor
               PDF, pilih &ldquo;Save as PDF&rdquo; pada dialog cetak browser.
             </p>
