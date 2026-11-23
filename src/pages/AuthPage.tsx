@@ -17,18 +17,26 @@ function normalizePhone(raw: string): string {
   return digits;
 }
 
-function getAuthRedirectUrl(path = ''): string {
+function getAuthRedirectUrl(path = ''): string | undefined {
   const envSiteUrl =
     typeof import.meta !== 'undefined' && import.meta.env?.VITE_SITE_URL
-      ? String(import.meta.env.VITE_SITE_URL).replace(/\/+$/, '')
+      ? String(import.meta.env.VITE_SITE_URL).trim().replace(/\/+$/, '')
       : '';
 
-  const baseUrl =
-    envSiteUrl || (typeof window !== 'undefined' ? window.location.origin : '');
+  const rawBase =
+    envSiteUrl ||
+    (typeof window !== 'undefined' ? window.location.origin.trim().replace(/\/+$/, '') : '');
 
-  if (!baseUrl) return '/';
-  if (!path) return baseUrl;
-  return `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
+  if (!rawBase || !/^https?:\/\//i.test(rawBase)) {
+    return undefined;
+  }
+
+  if (!path) {
+    return rawBase;
+  }
+
+  const cleanPath = `/${path.replace(/^\/+/, '')}`;
+  return `${rawBase}${cleanPath}`;
 }
 
 function EyeIcon({ open }: { open: boolean }) {
@@ -73,9 +81,9 @@ function EyeIcon({ open }: { open: boolean }) {
 function formatAuthError(rawMessage: string): string {
   const lower = rawMessage.toLowerCase();
   if (
+    lower.includes('invalid path specified in request url') ||
     lower.includes('redirect_to') ||
-    lower.includes('redirect url') ||
-    lower.includes('not allowed')
+    lower.includes('redirect url is not allowed')
   ) {
     return 'Tautan pengalihan (redirect URL) belum diizinkan di pengaturan Supabase Auth. Pastikan URL aplikasi sudah terdaftar di Redirect URLs Supabase.';
   }
@@ -147,11 +155,13 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
           return;
         }
 
+        const redirectTo = getAuthRedirectUrl('/app');
+
         const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
           password,
           options: {
-            emailRedirectTo: getAuthRedirectUrl(),
+            ...(redirectTo ? { emailRedirectTo: redirectTo } : {}),
             data: {
               phone: cleanPhone,
             },
@@ -183,8 +193,10 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
           'Pendaftaran berhasil. Silakan cek kotak masuk email (atau folder Spam) untuk konfirmasi akun, lalu masuk.'
         );
       } else if (mode === 'forgot') {
+        const redirectTo = getAuthRedirectUrl('/masuk');
+
         const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-          redirectTo: getAuthRedirectUrl(),
+          ...(redirectTo ? { redirectTo } : {}),
         });
         if (error) throw error;
         setMessage(
