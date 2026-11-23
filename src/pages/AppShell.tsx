@@ -1257,4 +1257,178 @@ export function AppShell({ onNavigate }: AppShellProps) {
                     </p>
                   </div>
                   <div>
-                    <span className="text-[1
+                    <span className="text-[11px] text-slate-400">BEP (Unit Terjual)</span>
+                    <p className="mt-0.5 font-bold text-emerald-300 tabular-nums">
+                      {bepSim.bepUnits !== null ? `${bepSim.bepUnits} unit` : 'Belum tercapai'}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-slate-400">BEP (Omzet)</span>
+                    <p className="mt-0.5 font-bold text-cyan-300 tabular-nums">
+                      {bepSim.bepRevenue !== null ? formatRupiah(bepSim.bepRevenue) : '-'}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-slate-400">
+                      Dari {bepSim.bepBatch} Unit Produksi
+                    </span>
+                    <p className="mt-0.5 font-bold text-white tabular-nums">
+                      {bepSim.bepPct !== null
+                        ? `BEP di ${bepSim.bepUnits} unit (${bepSim.bepPct.toFixed(1)}%)`
+                        : '-'}
+                    </p>
+                  </div>
+                  <div className="col-span-2 flex items-center justify-between border-t border-slate-800 pt-2">
+                    <span className="text-[11px] text-slate-400">Sisa Unit Murni Profit</span>
+                    <span className="font-bold text-emerald-300 tabular-nums">
+                      {bepSim.surplusUnits} unit ({formatRupiah(bepSim.surplusProfit)})
+                    </span>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-cyan-500/25 bg-cyan-950/20 p-3 text-xs leading-relaxed text-slate-200">
+                  {bepSim.isReachable && bepSim.bepUnits !== null ? (
+                    <>
+                      Contoh simulasi: Dengan <strong>{bepSim.bepBatch} unit</strong> terjual pada
+                      harga <strong>{formatRupiah(selectedUnitPrice)}</strong>, kamu balik modal
+                      setelah terjual <strong>{bepSim.bepUnits} unit</strong>, dan sisa{' '}
+                      <strong>{bepSim.surplusUnits} unit</strong> menghasilkan profit bersih{' '}
+                      <strong className="text-emerald-300 tabular-nums">
+                        {formatRupiah(bepSim.surplusProfit)}
+                      </strong>
+                      .
+                    </>
+                  ) : (
+                    <>
+                      Naikkan harga jual atau tekan biaya per unit agar profit per unit positif dan
+                      titik balik modal (BEP) dapat tercapai.
+                    </>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : null}
+        </section>
+
+        {/* Kolom Kanan: Preview Ringkasan & Ekspor PDF */}
+        <section className="lg:col-span-4">
+          <div className="print-card sticky top-20 rounded-2xl border border-slate-800 bg-slate-900/85 p-5 shadow-xl space-y-4">
+            <div className="flex items-start justify-between gap-2 border-b border-slate-800 pb-3">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">
+                  Preview Laporan HPP
+                </p>
+                <h2 className="text-lg font-bold text-white print:text-slate-900">
+                  {activeRecipe?.name ?? 'Produk'}
+                </h2>
+                <p className="text-xs text-slate-400 print:text-slate-600">
+                  Channel: {activeChannelSuggestion?.channel.name ?? 'Jual Langsung'} (Fee{' '}
+                  {selectedFeePercent}%)
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleExportPdf}
+                className="no-print rounded-xl bg-emerald-400 px-3 py-1.5 text-xs font-bold text-slate-950 hover:brightness-105"
+              >
+                Ekspor PDF
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-400 print:text-slate-600">Total Pembelian Bahan</span>
+                <span className="font-semibold tabular-nums">
+                  {formatRupiah(productionSummary.totalMaterialPurchase)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400 print:text-slate-600">
+                  Total Biaya Lain (TK + Overhead)
+                </span>
+                <span className="font-semibold tabular-nums">
+                  {formatRupiah(productionSummary.totalOtherCost)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400 print:text-slate-600">Biaya Produksi Total</span>
+                <span className="font-semibold tabular-nums">
+                  {formatRupiah(productionSummary.totalProductionCost)}
+                </span>
+              </div>
+              <div className="flex justify-between border-t border-slate-800 pt-2 text-sm">
+                <span className="font-bold">HPP per Produk</span>
+                <span className="font-extrabold text-emerald-300 print:text-emerald-700 tabular-nums">
+                  {formatRupiah(productionSummary.hppPerUnit)}
+                </span>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-800 bg-slate-950/75 p-3 print:border-slate-300 print:bg-slate-50 space-y-1.5 text-xs">
+              <p className="font-bold text-slate-200 print:text-slate-900">
+                Saran Harga ({activeChannelSuggestion?.channel.name})
+              </p>
+              <div className="flex justify-between tabular-nums">
+                <span>Bagus</span>
+                <span className="font-semibold">
+                  {formatRupiah(activeChannelSuggestion?.bagus.price ?? 0)}
+                </span>
+              </div>
+              <div className="flex justify-between tabular-nums">
+                <span>Sangat Bagus</span>
+                <span className="font-semibold">
+                  {formatRupiah(activeChannelSuggestion?.sangatBagus.price ?? 0)}
+                </span>
+              </div>
+              <div className="flex justify-between tabular-nums">
+                <span>Profitable</span>
+                <span className="font-semibold">
+                  {formatRupiah(activeChannelSuggestion?.profitable.price ?? 0)}
+                </span>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-800 bg-slate-950/75 p-3 print:border-slate-300 print:bg-slate-50 space-y-1.5 text-xs">
+              <p className="font-bold text-slate-200 print:text-slate-900">
+                Simulasi Terjual ({soldUnits} unit) &amp; BEP
+              </p>
+              <div className="flex justify-between tabular-nums">
+                <span>Harga Jual / Profit per Unit</span>
+                <span className="font-semibold">
+                  {formatRupiah(selectedUnitPrice)} / {formatRupiah(profitPerUnit)}
+                </span>
+              </div>
+              <div className="flex justify-between tabular-nums">
+                <span>Omzet / Total Profit</span>
+                <span className="font-bold text-cyan-300 print:text-cyan-700">
+                  {formatRupiah(totalRevenueFromSold)} / {formatRupiah(totalProfitFromSold)}
+                </span>
+              </div>
+              <div className="flex justify-between tabular-nums">
+                <span>Titik BEP</span>
+                <span className="font-semibold">
+                  {bepSim.bepUnits !== null
+                    ? `${bepSim.bepUnits} unit (${formatRupiah(bepSim.bepRevenue ?? 0)})`
+                    : '-'}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-400 print:text-slate-600">
+              Catatan F&amp;B: Margin minuman &amp; makanan disarankan &gt; 45%. Saat klik Ekspor
+              PDF, pilih &ldquo;Save as PDF&rdquo; pada dialog cetak browser.
+            </p>
+          </div>
+        </section>
+      </main>
+
+      <UpgradeModal
+        open={showUpgrade}
+        reason="Buka akses tanpa batas resep, bahan baku, dan channel penjualan di HPP-Kilat Pro."
+        userEmail={userEmail ?? undefined}
+        onClose={() => setShowUpgrade(false)}
+        onGoToAuth={() => onNavigate('/masuk')}
+      />
+    </div>
+  );
+}
