@@ -12,7 +12,6 @@ import type {
   ProfitMode,
   Recipe,
   RecipeCalculation,
-  RoundingStep,
   Unit,
 } from '../types';
 
@@ -79,7 +78,7 @@ export function AppShell({ onNavigate }: AppShellProps) {
   const [ingredients, setIngredients] = useState<Ingredient[]>(DEMO_INGREDIENTS);
   const [recipes, setRecipes] = useState<Recipe[]>([DEMO_RECIPE]);
   const [selectedId, setSelectedId] = useState<string>(DEMO_RECIPE.id);
-  const [roundingStep, setRoundingStep] = useState<RoundingStep>(500);
+  const roundingStep = 500 as const;
   const [channels, setChannels] = useState<Channel[]>(() =>
     DEMO_CHANNELS.map((ch) => ({
       ...ch,
@@ -626,37 +625,17 @@ export function AppShell({ onNavigate }: AppShellProps) {
             <>
               {/* FITUR 1 */}
               <div className={`rounded-2xl border p-5 space-y-4 ${surfaceCard}`}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span
-                      className={`text-[11px] font-bold uppercase tracking-wider ${
-                        isDark ? 'text-emerald-400' : 'text-emerald-700'
-                      }`}
-                    >
-                      Fitur 1
-                    </span>
-                    <h2 className={`text-base font-bold ${headingText}`}>
-                      Input Data Produk &amp; HPP
-                    </h2>
-                  </div>
-                  <div className="flex items-center gap-1 text-[11px]">
-                    {([100, 500, 1000] as RoundingStep[]).map((step) => (
-                      <button
-                        key={step}
-                        type="button"
-                        onClick={() => setRoundingStep(step)}
-                        className={`rounded-lg px-2 py-1 font-medium ${
-                          roundingStep === step
-                            ? 'bg-emerald-400 font-bold text-slate-950'
-                            : isDark
-                            ? 'bg-slate-800 text-slate-300'
-                            : 'bg-slate-100 text-slate-700'
-                        }`}
-                      >
-                        Rp{step}
-                      </button>
-                    ))}
-                  </div>
+                <div>
+                  <span
+                    className={`text-[11px] font-bold uppercase tracking-wider ${
+                      isDark ? 'text-emerald-400' : 'text-emerald-700'
+                    }`}
+                  >
+                    Fitur 1
+                  </span>
+                  <h2 className={`text-base font-bold ${headingText}`}>
+                    Input Data Produk &amp; HPP
+                  </h2>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2 text-xs">
