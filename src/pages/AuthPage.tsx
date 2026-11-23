@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { supabase } from '../lib/supabase';
+import { useTheme } from '../lib/theme';
 
 interface AuthPageProps {
   onNavigate: (to: string) => void;
@@ -14,6 +15,20 @@ function normalizePhone(raw: string): string {
     return `62${digits.slice(1)}`;
   }
   return digits;
+}
+
+function getAuthRedirectUrl(path = ''): string {
+  const envSiteUrl =
+    typeof import.meta !== 'undefined' && import.meta.env?.VITE_SITE_URL
+      ? String(import.meta.env.VITE_SITE_URL).replace(/\/+$/, '')
+      : '';
+
+  const baseUrl =
+    envSiteUrl || (typeof window !== 'undefined' ? window.location.origin : '');
+
+  if (!baseUrl) return '/';
+  if (!path) return baseUrl;
+  return `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
 }
 
 function EyeIcon({ open }: { open: boolean }) {
@@ -57,16 +72,25 @@ function EyeIcon({ open }: { open: boolean }) {
 
 function formatAuthError(rawMessage: string): string {
   const lower = rawMessage.toLowerCase();
-  if (lower.includes('invalid path') || lower.includes('redirect_to') || lower.includes('redirect')) {
+  if (
+    lower.includes('redirect_to') ||
+    lower.includes('redirect url') ||
+    lower.includes('not allowed')
+  ) {
     return 'Tautan pengalihan (redirect URL) belum diizinkan di pengaturan Supabase Auth. Pastikan URL aplikasi sudah terdaftar di Redirect URLs Supabase.';
   }
   if (lower.includes('invalid login credentials')) {
     return 'Email atau password belum sesuai. Silakan periksa kembali atau gunakan fitur Lupa password.';
   }
+  if (lower.includes('email rate limit exceeded') || lower.includes('too many requests')) {
+    return 'Terlalu banyak permintaan dalam waktu singkat. Silakan tunggu beberapa menit lalu coba lagi.';
+  }
   return rawMessage;
 }
 
 export function AuthPage({ onNavigate }: AuthPageProps) {
+  const { isDark } = useTheme();
+
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -127,12 +151,13 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
           email: email.trim(),
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/app`,
+            emailRedirectTo: getAuthRedirectUrl(),
             data: {
               phone: cleanPhone,
             },
           },
         });
+
         if (error) {
           const lower = error.message.toLowerCase();
           if (lower.includes('already registered') || lower.includes('already exists')) {
@@ -143,19 +168,23 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
           throw error;
         }
 
-        // Pada beberapa konfigurasi Supabase, email terdaftar mengembalikan user dengan identities kosong
         if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
           setEmailAlreadyRegistered(true);
           setErrorMsg('Email ini sudah terdaftar di HPP-Kilat.');
           return;
         }
 
+        if (data.session) {
+          onNavigate('/app');
+          return;
+        }
+
         setMessage(
-          'Pendaftaran berhasil. Silakan cek kotak masuk email jika diminta konfirmasi, atau langsung masuk.'
+          'Pendaftaran berhasil. Silakan cek kotak masuk email (atau folder Spam) untuk konfirmasi akun, lalu masuk.'
         );
       } else if (mode === 'forgot') {
         const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-          redirectTo: `${window.location.origin}/masuk`,
+          redirectTo: getAuthRedirectUrl(),
         });
         if (error) throw error;
         setMessage(
@@ -192,14 +221,30 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
     recovery: 'Buat password baru minimal 6 karakter untuk mengamankan akunmu.',
   };
 
+  const inputClass = isDark
+    ? 'border-slate-700/80 bg-slate-950/80 text-white placeholder-slate-500 focus:border-emerald-400'
+    : 'border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 focus:border-emerald-500 focus:bg-white';
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-8 text-slate-100">
-      <div className="w-full max-w-md rounded-3xl border border-slate-800/90 bg-gradient-to-b from-slate-900 via-slate-900/95 to-slate-950 p-6 shadow-2xl shadow-black/60 ring-1 ring-white/5 sm:p-7">
+    <div
+      className={`flex min-h-screen items-center justify-center px-4 py-8 transition-colors duration-300 ${
+        isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
+      }`}
+    >
+      <div
+        className={`w-full max-w-md rounded-3xl border p-6 transition-colors duration-300 sm:p-7 ${
+          isDark
+            ? 'border-slate-800/90 bg-gradient-to-b from-slate-900 via-slate-900/95 to-slate-950 shadow-2xl shadow-black/60 ring-1 ring-white/5'
+            : 'border-slate-200 bg-white shadow-xl shadow-slate-900/5'
+        }`}
+      >
         <div className="mb-6 flex items-center justify-between">
           <button
             type="button"
             onClick={() => onNavigate('/')}
-            className="text-xs font-medium text-slate-400 transition hover:text-white"
+            className={`text-xs font-medium transition ${
+              isDark ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900'
+            }`}
           >
             &larr; Kembali ke Beranda
           </button>
@@ -208,21 +253,32 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
           </span>
         </div>
 
-        <h1 className="text-2xl font-bold text-white">{titleByMode[mode]}</h1>
-        <p className="mt-1.5 text-xs leading-relaxed text-slate-400 sm:text-sm">
+        <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+          {titleByMode[mode]}
+        </h1>
+        <p
+          className={`mt-1.5 text-xs leading-relaxed sm:text-sm ${
+            isDark ? 'text-slate-400' : 'text-slate-500'
+          }`}
+        >
           {subtitleByMode[mode]}
         </p>
 
-        {/* Tab Masuk / Daftar */}
         {(mode === 'login' || mode === 'signup') && (
-          <div className="mt-5 grid grid-cols-2 gap-1.5 rounded-2xl border border-slate-800 bg-slate-950/80 p-1 text-xs font-semibold">
+          <div
+            className={`mt-5 grid grid-cols-2 gap-1.5 rounded-2xl border p-1 text-xs font-semibold ${
+              isDark ? 'border-slate-800 bg-slate-950/80' : 'border-slate-200 bg-slate-100'
+            }`}
+          >
             <button
               type="button"
               onClick={() => switchTab('login')}
               className={`rounded-xl py-2.5 transition ${
                 mode === 'login'
                   ? 'bg-emerald-400 text-slate-950 shadow'
-                  : 'text-slate-400 hover:text-white'
+                  : isDark
+                  ? 'text-slate-400 hover:text-white'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Masuk
@@ -233,7 +289,9 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
               className={`rounded-xl py-2.5 transition ${
                 mode === 'signup'
                   ? 'bg-emerald-400 text-slate-950 shadow'
-                  : 'text-slate-400 hover:text-white'
+                  : isDark
+                  ? 'text-slate-400 hover:text-white'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Daftar
@@ -244,7 +302,10 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
         <form onSubmit={handleSubmit} className="mt-5 space-y-4 text-xs sm:text-sm">
           {mode !== 'recovery' && (
             <div>
-              <label htmlFor="auth-email" className="block font-medium text-slate-300">
+              <label
+                htmlFor="auth-email"
+                className={`block font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}
+              >
                 Email
               </label>
               <input
@@ -258,14 +319,17 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
                   if (emailAlreadyRegistered) setEmailAlreadyRegistered(false);
                 }}
                 placeholder="nama@usaha.com"
-                className="mt-1.5 w-full rounded-xl border border-slate-700/80 bg-slate-950/80 px-3.5 py-2.5 text-white placeholder-slate-500 focus:border-emerald-400 focus:outline-none"
+                className={`mt-1.5 w-full rounded-xl border px-3.5 py-2.5 focus:outline-none ${inputClass}`}
               />
             </div>
           )}
 
           {mode === 'signup' && (
             <div>
-              <label htmlFor="auth-phone" className="block font-medium text-slate-300">
+              <label
+                htmlFor="auth-phone"
+                className={`block font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}
+              >
                 Nomor HP / WhatsApp
               </label>
               <input
@@ -277,9 +341,9 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="081234567890"
-                className="mt-1.5 w-full rounded-xl border border-slate-700/80 bg-slate-950/80 px-3.5 py-2.5 text-white placeholder-slate-500 focus:border-emerald-400 focus:outline-none"
+                className={`mt-1.5 w-full rounded-xl border px-3.5 py-2.5 focus:outline-none ${inputClass}`}
               />
-              <p className="mt-1 text-[11px] text-slate-400">
+              <p className={`mt-1 text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                 Dipakai untuk info akun &amp; koordinasi promo/bantuan UMKM.
               </p>
             </div>
@@ -288,7 +352,10 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
           {(mode === 'login' || mode === 'signup') && (
             <div>
               <div className="flex items-center justify-between">
-                <label htmlFor="auth-password" className="block font-medium text-slate-300">
+                <label
+                  htmlFor="auth-password"
+                  className={`block font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}
+                >
                   Password
                 </label>
                 {mode === 'login' && (
@@ -298,7 +365,9 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
                       resetFeedback();
                       setMode('forgot');
                     }}
-                    className="text-xs font-medium text-emerald-400 hover:underline"
+                    className={`text-xs font-medium hover:underline ${
+                      isDark ? 'text-emerald-400' : 'text-emerald-700'
+                    }`}
                   >
                     Lupa password?
                   </button>
@@ -315,13 +384,17 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Minimal 6 karakter"
-                  className="w-full rounded-xl border border-slate-700/80 bg-slate-950/80 py-2.5 pl-3.5 pr-20 text-white placeholder-slate-500 focus:border-emerald-400 focus:outline-none"
+                  className={`w-full rounded-xl border py-2.5 pl-3.5 pr-20 focus:outline-none ${inputClass}`}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
                   aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
-                  className="absolute right-2 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-lg border border-slate-700/80 bg-slate-900 px-2 py-1 text-[11px] font-medium text-slate-300 transition hover:border-slate-500 hover:text-white"
+                  className={`absolute right-2 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium transition ${
+                    isDark
+                      ? 'border-slate-700/80 bg-slate-900 text-slate-300 hover:border-slate-500 hover:text-white'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
+                  }`}
                 >
                   <EyeIcon open={showPassword} />
                   <span>{showPassword ? 'Hide' : 'Show'}</span>
@@ -332,7 +405,10 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
 
           {mode === 'recovery' && (
             <div>
-              <label htmlFor="new-password" className="block font-medium text-slate-300">
+              <label
+                htmlFor="new-password"
+                className={`block font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}
+              >
                 Password Baru
               </label>
               <div className="relative mt-1.5">
@@ -345,13 +421,17 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="Masukkan password baru (min. 6 karakter)"
-                  className="w-full rounded-xl border border-slate-700/80 bg-slate-950/80 py-2.5 pl-3.5 pr-20 text-white placeholder-slate-500 focus:border-emerald-400 focus:outline-none"
+                  className={`w-full rounded-xl border py-2.5 pl-3.5 pr-20 focus:outline-none ${inputClass}`}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
                   aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
-                  className="absolute right-2 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-lg border border-slate-700/80 bg-slate-900 px-2 py-1 text-[11px] font-medium text-slate-300 transition hover:border-slate-500 hover:text-white"
+                  className={`absolute right-2 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium transition ${
+                    isDark
+                      ? 'border-slate-700/80 bg-slate-900 text-slate-300 hover:border-slate-500 hover:text-white'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
+                  }`}
                 >
                   <EyeIcon open={showPassword} />
                   <span>{showPassword ? 'Hide' : 'Show'}</span>
@@ -361,7 +441,13 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
           )}
 
           {errorMsg && (
-            <div className="rounded-2xl border border-rose-500/35 bg-rose-500/10 p-3 text-xs leading-relaxed text-rose-200">
+            <div
+              className={`rounded-2xl border p-3 text-xs leading-relaxed ${
+                isDark
+                  ? 'border-rose-500/35 bg-rose-500/10 text-rose-200'
+                  : 'border-rose-200 bg-rose-50 text-rose-800'
+              }`}
+            >
               <p>{errorMsg}</p>
               {emailAlreadyRegistered && (
                 <div className="mt-2.5 flex flex-wrap gap-2">
@@ -378,7 +464,11 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
                       resetFeedback();
                       setMode('forgot');
                     }}
-                    className="rounded-lg border border-rose-300/30 bg-slate-950/60 px-3 py-1.5 text-[11px] font-medium text-rose-100 transition hover:bg-slate-900"
+                    className={`rounded-lg border px-3 py-1.5 text-[11px] font-medium transition ${
+                      isDark
+                        ? 'border-rose-300/30 bg-slate-950/60 text-rose-100 hover:bg-slate-900'
+                        : 'border-rose-300 bg-white text-rose-700 hover:bg-rose-100/60'
+                    }`}
                   >
                     Lupa password?
                   </button>
@@ -388,7 +478,13 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
           )}
 
           {message && (
-            <div className="rounded-2xl border border-emerald-500/35 bg-emerald-500/10 p-3 text-xs leading-relaxed text-emerald-200">
+            <div
+              className={`rounded-2xl border p-3 text-xs leading-relaxed ${
+                isDark
+                  ? 'border-emerald-500/35 bg-emerald-500/10 text-emerald-200'
+                  : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+              }`}
+            >
               {message}
             </div>
           )}
@@ -413,18 +509,28 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
             <button
               type="button"
               onClick={() => switchTab('login')}
-              className="w-full rounded-xl border border-slate-700/80 bg-slate-900/80 py-2.5 text-xs font-medium text-slate-300 transition hover:border-slate-500 hover:text-white"
+              className={`w-full rounded-xl border py-2.5 text-xs font-medium transition ${
+                isDark
+                  ? 'border-slate-700/80 bg-slate-900/80 text-slate-300 hover:border-slate-500 hover:text-white'
+                  : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:text-slate-900'
+              }`}
             >
               Kembali ke halaman Masuk
             </button>
           )}
         </form>
 
-        <div className="mt-6 border-t border-slate-800/80 pt-4 text-center">
+        <div
+          className={`mt-6 border-t pt-4 text-center ${
+            isDark ? 'border-slate-800/80' : 'border-slate-200'
+          }`}
+        >
           <button
             type="button"
             onClick={() => onNavigate('/app')}
-            className="text-xs font-medium text-slate-400 underline-offset-4 hover:text-emerald-300 hover:underline"
+            className={`text-xs font-medium underline-offset-4 hover:underline ${
+              isDark ? 'text-slate-400 hover:text-emerald-300' : 'text-slate-500 hover:text-emerald-700'
+            }`}
           >
             Lanjut coba kalkulator tanpa login
           </button>
